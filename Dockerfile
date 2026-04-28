@@ -63,4 +63,6 @@ RUN uv venv && \
 ENV HERMES_WEB_DIST=/opt/hermes/hermes_cli/web_dist
 ENV HERMES_HOME=/opt/data
 ENV PATH="/opt/data/.local/bin:${PATH}"
+RUN ln -sf /opt/data/AGENTS.md /opt/hermes/AGENTS.md && \
+    ln -sf /opt/data/SOUL.md /opt/hermes/SOUL.md
 ENTRYPOINT [ "/usr/bin/tini", "-g", "--", "/opt/hermes/docker/entrypoint.sh" ]
