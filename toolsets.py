@@ -214,6 +214,26 @@ TOOLSETS = {
         "includes": [],
     },
 
+    "publisher": {
+        "description": "Publisher service tools — caption generation, post queue/publish, ad-hoc ingest, owner DM. Gated on PUBLISHER_BASE_URL + PUBLISHER_API_KEY.",
+        "tools": [
+            "publisher_generate_caption",
+            "publisher_queue_post",
+            "publisher_publish_post",
+            "publisher_get_post",
+            "publisher_list_pending",
+            "publisher_ingest_adhoc",
+            "discord_dm_owner",
+        ],
+        "includes": [],
+    },
+
+    "airtable": {
+        "description": "Content log writer — Airtable when AIRTABLE_* env vars set, JSONL fallback otherwise.",
+        "tools": ["airtable_log_post"],
+        "includes": [],
+    },
+
     "yuanbao": {
         "description": "Yuanbao platform tools - group info, member queries, DM, stickers",
         "tools": [
@@ -325,9 +345,9 @@ TOOLSETS = {
     },
     
     "hermes-cli": {
-        "description": "Full interactive CLI toolset - all default tools plus cronjob management",
+        "description": "Full interactive CLI toolset - all default tools plus cronjob management, publisher, airtable",
         "tools": _HERMES_CORE_TOOLS,
-        "includes": []
+        "includes": ["publisher", "airtable"]
     },
 
     "hermes-cron": {
@@ -348,12 +368,12 @@ TOOLSETS = {
     },
     
     "hermes-discord": {
-        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval)",
+        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval), publisher + airtable for content workflow",
         "tools": _HERMES_CORE_TOOLS + [
             "discord",
             "discord_admin",
         ],
-        "includes": []
+        "includes": ["publisher", "airtable"]
     },
     
     "hermes-whatsapp": {
