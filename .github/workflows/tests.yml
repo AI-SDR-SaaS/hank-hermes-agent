@@ -23,7 +23,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -46,7 +46,20 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          python -m pytest tests/ -q --ignore=tests/integration --ignore=tests/e2e --tb=short -n auto
+          # Fork-scope: ignore upstream test directories testing features
+          # this fork doesn't ship (TUI gateway). Removing an --ignore line
+          # re-enables that directory's coverage.
+          #
+          # -n 1 (serial) deliberately: upstream's test suite has poor
+          # isolation under xdist parallelism, surfacing a different ~5
+          # random failures on each run as the worker scheduling shuffles.
+          # Serial execution is slower (~3x) but deterministic; the
+          # timeout-minutes was bumped to 40 to compensate.
+          python -m pytest tests/ -q \
+            --ignore=tests/integration \
+            --ignore=tests/e2e \
+            --ignore=tests/tui_gateway \
+            --tb=short -n 1
         env:
           # Ensure tests don't accidentally call real APIs
           OPENROUTER_API_KEY: ""

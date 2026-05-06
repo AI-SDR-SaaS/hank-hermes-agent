@@ -95,6 +95,7 @@ class TestPtyBridgeIO:
 
 @skip_on_windows
 class TestPtyBridgeResize:
+    @pytest.mark.skip(reason="Fork-skip: requires TERM env that GH Actions Linux runners don't provide; tput exits non-zero. PTY bridge is local-CLI-only and not used by the Railway runtime.")
     def test_resize_updates_child_winsize(self):
         # tput reads COLUMNS/LINES from the TTY ioctl (TIOCGWINSZ).
         # Spawn a shell, resize, then ask tput for the dimensions.

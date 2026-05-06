@@ -72,6 +72,8 @@ CONFIGURABLE_TOOLSETS = [
     ("discord",         "💬 Discord (read/participate)", "fetch messages, search members, create thread"),
     ("discord_admin",   "🛡️  Discord Server Admin",    "list channels/roles, pin, assign roles"),
     ("yuanbao",          "🤖 Yuanbao",                  "group info, member queries, DM"),
+    ("publisher",       "📤 Publisher",                  "caption gen, post queue/publish, ad-hoc ingest, owner DM (gated on PUBLISHER_BASE_URL + PUBLISHER_API_KEY)"),
+    ("airtable",        "📊 Content Log",                "log posts to Airtable when configured, JSONL fallback otherwise"),
 ]
 
 # Toolsets that are OFF by default for new installs.
