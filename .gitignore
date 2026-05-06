@@ -21,6 +21,11 @@ data/
 tmp/
 temp_vision_images/
 hermes-*/*
+
+# hermes-social-media is a sibling service with its own git repo,
+# nested here for workspace convenience. Don't track it from the agent repo.
+hermes-social-media/
+
 examples/
 tests/quick_test_dataset.jsonl
 tests/sample_dataset.jsonl
