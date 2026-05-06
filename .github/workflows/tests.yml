@@ -46,7 +46,14 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          python -m pytest tests/ -q --ignore=tests/integration --ignore=tests/e2e --tb=short -n auto
+          # Fork-scope: ignore upstream test directories testing features
+          # this fork doesn't ship (TUI gateway, modal sandbox tool resolution).
+          # Removing an --ignore line re-enables that directory's coverage.
+          python -m pytest tests/ -q \
+            --ignore=tests/integration \
+            --ignore=tests/e2e \
+            --ignore=tests/tui_gateway \
+            --tb=short -n auto
         env:
           # Ensure tests don't accidentally call real APIs
           OPENROUTER_API_KEY: ""
