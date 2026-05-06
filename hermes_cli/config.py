@@ -1639,6 +1639,71 @@ OPTIONAL_ENV_VARS = {
         "category": "tool",
     },
 
+    # ── Publisher service (Hank Hermes social media publisher) ──
+    "PUBLISHER_BASE_URL": {
+        "description": "Base URL of the deployed publisher service (no trailing slash)",
+        "prompt": "Publisher base URL",
+        "url": None,
+        "tools": [
+            "publisher_generate_caption",
+            "publisher_queue_post",
+            "publisher_publish_post",
+            "publisher_get_post",
+            "publisher_list_pending",
+            "publisher_ingest_adhoc",
+        ],
+        "password": False,
+        "category": "tool",
+    },
+    "PUBLISHER_API_KEY": {
+        "description": "Bearer token for the publisher service API (matches ACE_API_KEY in the publisher .env)",
+        "prompt": "Publisher API key",
+        "url": None,
+        "tools": [
+            "publisher_generate_caption",
+            "publisher_queue_post",
+            "publisher_publish_post",
+            "publisher_get_post",
+            "publisher_list_pending",
+            "publisher_ingest_adhoc",
+        ],
+        "password": True,
+        "category": "tool",
+    },
+    "PUBLISHER_WEBHOOK_HMAC_SECRET": {
+        "description": "Shared HMAC-SHA256 secret used by the publisher to sign inbound callbacks at /webhooks/publisher",
+        "prompt": "Publisher webhook HMAC secret",
+        "url": None,
+        "password": True,
+        "category": "tool",
+    },
+
+    # ── Airtable content log (Airtable when set, JSONL fallback otherwise) ──
+    "AIRTABLE_API_KEY": {
+        "description": "Airtable Personal Access Token for the content log (optional — JSONL fallback runs without it)",
+        "prompt": "Airtable API key",
+        "url": "https://airtable.com/create/tokens",
+        "tools": ["airtable_log_post"],
+        "password": True,
+        "category": "tool",
+    },
+    "AIRTABLE_BASE_ID": {
+        "description": "Airtable base ID containing the Content Log table",
+        "prompt": "Airtable base ID",
+        "url": None,
+        "tools": ["airtable_log_post"],
+        "password": False,
+        "category": "tool",
+    },
+    "AIRTABLE_CONTENT_LOG_TABLE": {
+        "description": "Airtable table name (or ID) for the Content Log",
+        "prompt": "Airtable Content Log table",
+        "url": None,
+        "tools": ["airtable_log_post"],
+        "password": False,
+        "category": "tool",
+    },
+
     # ── Bundled skills (opt-in: only needed if the user uses that skill) ──
     # These use category="skill" (distinct from "tool") so the sandbox
     # env blocklist in tools/environments/local.py does NOT rewrite them —
@@ -1731,6 +1796,14 @@ OPTIONAL_ENV_VARS = {
         "description": "Discord reply threading mode: 'off' (no reply references), 'first' (reply on first message only, default), 'all' (reply on every chunk)",
         "prompt": "Discord reply mode (off/first/all)",
         "url": None,
+        "password": False,
+        "category": "messaging",
+    },
+    "DISCORD_OWNER_USER_ID": {
+        "description": "Discord user ID to receive DMs from discord_dm_owner (nudges, summaries, ad-hoc clarifications)",
+        "prompt": "Discord owner user ID",
+        "url": None,
+        "tools": ["discord_dm_owner"],
         "password": False,
         "category": "messaging",
     },
