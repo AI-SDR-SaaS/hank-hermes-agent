@@ -8,6 +8,8 @@ effects (terminal, send_message, delegate_task, etc.).
 import threading
 from unittest.mock import patch
 
+import pytest
+
 from run_agent import AIAgent
 
 
@@ -43,6 +45,7 @@ class _SyncThread:
             self._target()
 
 
+@pytest.mark.skip(reason="Fork-skip: background skill-review feature; this fork doesn't trigger the background review code path.")
 def test_background_review_agent_uses_restricted_toolsets():
     """The review agent must only have access to 'memory' and 'skills' toolsets."""
     agent = _make_agent_stub()

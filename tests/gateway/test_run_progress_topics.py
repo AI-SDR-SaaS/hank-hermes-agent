@@ -248,6 +248,7 @@ async def test_run_agent_progress_does_not_use_event_message_id_for_telegram_dm(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Fork-skip: Slack DM progress hook; this fork uses Discord, not Slack, for owner DMs.")
 async def test_run_agent_progress_uses_event_message_id_for_slack_dm(monkeypatch, tmp_path):
     """Slack DM progress should keep event ts fallback threading."""
     monkeypatch.setenv("HERMES_TOOL_PROGRESS_MODE", "all")

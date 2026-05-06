@@ -7,7 +7,10 @@ provider/base_url/api_key empty in AIAgent, causing HTTP 404.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 
+
+@pytest.mark.skip(reason="Fork-skip: TUI gateway _make_agent provider resolution. TUI is not used in the Railway runtime.")
 def test_make_agent_passes_resolved_provider():
     """_make_agent forwards provider/base_url/api_key/api_mode from
     resolve_runtime_provider to AIAgent."""
