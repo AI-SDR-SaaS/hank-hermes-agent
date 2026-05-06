@@ -78,7 +78,7 @@ class TestNormalizeCustomProviderEntry:
         assert result is not None
         assert result["base_url"] == "https://correct.example.com/v1"
 
-    @pytest.mark.skip(reason="Fork-skip: caplog isolation under pytest 9 doesn't capture this warning consistently — tested behaviour works in production.")
+    @pytest.mark.xfail(reason="Fork-xfail: caplog isolation under pytest 9 doesn't capture this warning consistently — preserve coverage when conditions allow; strict=False so a pass is also fine.", strict=False)
     def test_unknown_keys_logged(self, caplog):
         """Unknown config keys should produce a warning."""
         entry = {
@@ -92,7 +92,7 @@ class TestNormalizeCustomProviderEntry:
         assert result is not None
         assert any("unknown config keys" in r.message.lower() for r in caplog.records)
 
-    @pytest.mark.skip(reason="Fork-skip: caplog isolation under pytest 9 doesn't capture this warning consistently — tested behaviour works in production.")
+    @pytest.mark.xfail(reason="Fork-xfail: same caplog isolation issue as test_unknown_keys_logged; preserve camelCase warning coverage; strict=False so a pass is fine.", strict=False)
     def test_camel_case_warning_logged(self, caplog):
         """camelCase alias mapping should produce a warning."""
         entry = {

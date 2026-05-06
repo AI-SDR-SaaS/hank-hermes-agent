@@ -221,13 +221,13 @@ class TestIsWsl:
         with patch("builtins.open", mock_open(read_data=content)):
             assert _is_wsl() is True
 
-    @pytest.mark.skip(reason="Fork-skip: TestIsWsl shares cache with hermes_constants._wsl_detected; setup_method reset doesn't fully isolate against earlier-test cache pollution. Whole class is fork-irrelevant on Railway.")
+    @pytest.mark.xfail(reason="Fork-xfail: hermes_constants._wsl_detected cache contamination on serial CI; preserve false-path coverage by letting the test run — strict=False so a pass is fine.", strict=False)
     def test_regular_linux(self):
         content = "Linux version 6.14.0-37-generic (buildd@lcy02-amd64-049)"
         with patch("builtins.open", mock_open(read_data=content)):
             assert _is_wsl() is False
 
-    @pytest.mark.skip(reason="Fork-skip: same TestIsWsl cache contamination as test_regular_linux.")
+    @pytest.mark.xfail(reason="Fork-xfail: same cache contamination as test_regular_linux; preserve missing-/proc/version coverage when conditions allow.", strict=False)
     def test_proc_version_missing(self):
         with patch("builtins.open", side_effect=FileNotFoundError):
             assert _is_wsl() is False
