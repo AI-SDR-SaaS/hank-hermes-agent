@@ -13,7 +13,7 @@ import pytest
 from tools import publisher_client, publisher_tools
 from tools.publisher_tools import (
     PUBLISHER_TOOLSET,
-    _discord_dm_owner,
+    _telegram_dm_owner,
     _generate_caption,
     _get_post,
     _ingest_adhoc,
@@ -38,7 +38,7 @@ from tools.registry import registry
         "publisher_get_post",
         "publisher_list_pending",
         "publisher_ingest_adhoc",
-        "discord_dm_owner",
+        "telegram_dm_owner",
     ],
 )
 def test_tool_registered_under_publisher_toolset(name):
@@ -219,33 +219,33 @@ def test_publisher_client_error_surfaces_as_tool_error():
 
 
 # ---------------------------------------------------------------------------
-# discord_dm_owner
+# telegram_dm_owner
 # ---------------------------------------------------------------------------
 
 
-def test_discord_dm_owner_requires_env(monkeypatch):
-    monkeypatch.delenv("DISCORD_OWNER_USER_ID", raising=False)
-    result = json.loads(_discord_dm_owner({"message": "hello"}))
+def test_telegram_dm_owner_requires_env(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_OWNER_USER_ID", raising=False)
+    result = json.loads(_telegram_dm_owner({"message": "hello"}))
     assert "error" in result
-    assert "DISCORD_OWNER_USER_ID" in result["error"]
+    assert "TELEGRAM_OWNER_USER_ID" in result["error"]
 
 
-def test_discord_dm_owner_requires_message(monkeypatch):
-    monkeypatch.setenv("DISCORD_OWNER_USER_ID", "111222333")
-    result = json.loads(_discord_dm_owner({"message": "  "}))
+def test_telegram_dm_owner_requires_message(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_OWNER_USER_ID", "111222333")
+    result = json.loads(_telegram_dm_owner({"message": "  "}))
     assert "error" in result
 
 
-def test_discord_dm_owner_delegates_to_send_message(monkeypatch):
-    monkeypatch.setenv("DISCORD_OWNER_USER_ID", "111222333")
-    fake_response = json.dumps({"success": True, "platform": "discord"})
+def test_telegram_dm_owner_delegates_to_send_message(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_OWNER_USER_ID", "111222333")
+    fake_response = json.dumps({"success": True, "platform": "telegram"})
 
     def fake_send(args, **_kw):
-        assert args["target"] == "discord:111222333"
+        assert args["target"] == "telegram:111222333"
         assert args["message"] == "queue is backed up"
         assert args["action"] == "send"
         return fake_response
 
     with patch("tools.send_message_tool.send_message_tool", side_effect=fake_send):
-        result = json.loads(_discord_dm_owner({"message": "queue is backed up"}))
+        result = json.loads(_telegram_dm_owner({"message": "queue is backed up"}))
     assert result["success"] is True
