@@ -291,6 +291,7 @@ class TestCheckFnExceptionHandling:
 class TestBuiltinDiscovery:
     def test_matches_previous_manual_builtin_tool_set(self):
         expected = {
+            "tools.airtable_log_post_tool",
             "tools.browser_cdp_tool",
             "tools.browser_dialog_tool",
             "tools.browser_tool",
@@ -307,6 +308,7 @@ class TestBuiltinDiscovery:
             "tools.memory_tool",
             "tools.mixture_of_agents_tool",
             "tools.process_registry",
+            "tools.publisher_tools",
             "tools.rl_training_tool",
             "tools.send_message_tool",
             "tools.session_search_tool",
