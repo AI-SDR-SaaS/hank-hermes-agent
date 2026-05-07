@@ -76,6 +76,34 @@ if [ ! -f "$HERMES_HOME/config.yaml" ]; then
     cp "$INSTALL_DIR/cli-config.yaml.example" "$HERMES_HOME/config.yaml"
 fi
 
+# Idempotently inject the publisher webhook stanza into config.yaml.
+# Runs only when PUBLISHER_WEBHOOK_HMAC_SECRET is set and the route isn't
+# already present, so manual edits and reruns are safe.
+if [ -n "$PUBLISHER_WEBHOOK_HMAC_SECRET" ] && \
+   [ -f "$HERMES_HOME/config.yaml" ] && \
+   ! grep -q "^        publisher:" "$HERMES_HOME/config.yaml"; then
+    echo "Injecting publisher webhook stanza into $HERMES_HOME/config.yaml"
+    cat >> "$HERMES_HOME/config.yaml" <<EOF
+
+platforms:
+  webhook:
+    enabled: true
+    extra:
+      port: 8080
+      routes:
+        publisher:
+          secret: "$PUBLISHER_WEBHOOK_HMAC_SECRET"
+          prompt: |
+            Publisher event: {event_type}
+            Post ID: {post_id}
+            Content type: {content_type}
+            Source: {source}
+            Dropbox path: {dropbox_path}
+            Ad-hoc: {is_ad_hoc}
+          deliver: "log"
+EOF
+fi
+
 # SOUL.md
 if [ ! -f "$HERMES_HOME/SOUL.md" ]; then
     cp "$INSTALL_DIR/docker/SOUL.md" "$HERMES_HOME/SOUL.md"
