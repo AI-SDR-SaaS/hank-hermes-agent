@@ -223,7 +223,7 @@ TOOLSETS = {
             "publisher_get_post",
             "publisher_list_pending",
             "publisher_ingest_adhoc",
-            "discord_dm_owner",
+            "telegram_dm_owner",
         ],
         "includes": [],
     },

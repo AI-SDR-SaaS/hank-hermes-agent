@@ -1799,11 +1799,11 @@ OPTIONAL_ENV_VARS = {
         "password": False,
         "category": "messaging",
     },
-    "DISCORD_OWNER_USER_ID": {
-        "description": "Discord user ID to receive DMs from discord_dm_owner (nudges, summaries, ad-hoc clarifications)",
-        "prompt": "Discord owner user ID",
+    "TELEGRAM_OWNER_USER_ID": {
+        "description": "Telegram chat ID to receive DMs from telegram_dm_owner (nudges, summaries, ad-hoc clarifications). Numeric — your user ID for DMs, or a negative chat ID for a private group.",
+        "prompt": "Telegram owner chat ID",
         "url": None,
-        "tools": ["discord_dm_owner"],
+        "tools": ["telegram_dm_owner"],
         "password": False,
         "category": "messaging",
     },

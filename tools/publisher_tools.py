@@ -8,7 +8,7 @@ Registers seven tools under the ``publisher`` toolset:
   - ``publisher_get_post``             GET  /api/posts/:post_id
   - ``publisher_list_pending``         GET  /api/posts?status=...
   - ``publisher_ingest_adhoc``         POST /api/ad-hoc/ingest
-  - ``discord_dm_owner``               thin wrapper over send_message_tool
+  - ``telegram_dm_owner``              thin wrapper over send_message_tool
 
 Inbound publisher → Hermes notifications go through the existing webhook
 gateway adapter (``gateway/platforms/webhook.py``). To wire it up, add this
@@ -352,15 +352,15 @@ def _ingest_adhoc(args: dict, **_kw: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
-# discord_dm_owner — thin wrapper over send_message_tool
+# telegram_dm_owner — thin wrapper over send_message_tool
 # ---------------------------------------------------------------------------
 
-DISCORD_DM_OWNER_SCHEMA = {
-    "name": "discord_dm_owner",
+TELEGRAM_DM_OWNER_SCHEMA = {
+    "name": "telegram_dm_owner",
     "description": (
-        "DM the owner (Jonathan) on Discord. Use for nudges about pending "
+        "DM the owner (Jonathan) on Telegram. Use for nudges about pending "
         "approvals, summaries of recent activity, and ad-hoc clarifications. "
-        "The recipient is read from DISCORD_OWNER_USER_ID at call time. "
+        "The recipient is read from TELEGRAM_OWNER_USER_ID at call time. "
         "Supports MEDIA:<local_path> in the message body to attach files."
     ),
     "parameters": {
@@ -373,14 +373,14 @@ DISCORD_DM_OWNER_SCHEMA = {
 }
 
 
-def _check_discord_dm_owner_requirements() -> bool:
-    return bool(os.getenv("DISCORD_OWNER_USER_ID"))
+def _check_telegram_dm_owner_requirements() -> bool:
+    return bool(os.getenv("TELEGRAM_OWNER_USER_ID"))
 
 
-def _discord_dm_owner(args: dict, **kw: Any) -> str:
-    user_id = (os.getenv("DISCORD_OWNER_USER_ID") or "").strip()
+def _telegram_dm_owner(args: dict, **kw: Any) -> str:
+    user_id = (os.getenv("TELEGRAM_OWNER_USER_ID") or "").strip()
     if not user_id:
-        return tool_error("DISCORD_OWNER_USER_ID is not set")
+        return tool_error("TELEGRAM_OWNER_USER_ID is not set")
     message = (args.get("message") or "").strip()
     if not message:
         return tool_error("'message' is required")
@@ -390,7 +390,7 @@ def _discord_dm_owner(args: dict, **kw: Any) -> str:
     return send_message_tool(
         {
             "action": "send",
-            "target": f"discord:{user_id}",
+            "target": f"telegram:{user_id}",
             "message": message,
         },
         **kw,
@@ -460,10 +460,10 @@ registry.register(
 )
 
 registry.register(
-    name="discord_dm_owner",
+    name="telegram_dm_owner",
     toolset=PUBLISHER_TOOLSET,
-    schema=DISCORD_DM_OWNER_SCHEMA,
-    handler=lambda args, **kw: _discord_dm_owner(args, **kw),
-    check_fn=_check_discord_dm_owner_requirements,
-    requires_env=["DISCORD_OWNER_USER_ID"],
+    schema=TELEGRAM_DM_OWNER_SCHEMA,
+    handler=lambda args, **kw: _telegram_dm_owner(args, **kw),
+    check_fn=_check_telegram_dm_owner_requirements,
+    requires_env=["TELEGRAM_OWNER_USER_ID"],
 )
