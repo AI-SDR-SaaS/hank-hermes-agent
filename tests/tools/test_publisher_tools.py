@@ -20,6 +20,7 @@ from tools.publisher_tools import (
     _list_pending,
     _publish_post,
     _queue_post,
+    _quick_post,
 )
 from tools.registry import registry
 
@@ -38,6 +39,7 @@ from tools.registry import registry
         "publisher_get_post",
         "publisher_list_pending",
         "publisher_ingest_adhoc",
+        "publisher_quick_post",
         "telegram_dm_owner",
     ],
 )
@@ -206,6 +208,66 @@ def test_ingest_adhoc_happy_path():
         result = json.loads(_ingest_adhoc(args))
     assert result["ready"] is True
     assert result["media_path"].endswith(".mp4")
+
+
+# ---------------------------------------------------------------------------
+# publisher_quick_post
+# ---------------------------------------------------------------------------
+
+
+def test_quick_post_rejects_missing_required_fields():
+    # Missing angle, media_urls, caption.
+    result = json.loads(_quick_post({}))
+    assert "error" in result
+
+
+def test_quick_post_rejects_empty_media_urls():
+    result = json.loads(
+        _quick_post(
+            {"angle": "storm", "media_urls": [], "caption": "Body"}
+        )
+    )
+    assert "error" in result
+
+
+def test_quick_post_happy_path():
+    fake = {
+        "post_id": "cmp_abc",
+        "dropbox_root_path": "/content/ad-hoc/hankai_storm-promo_book-demo-20260510120000-abcd",
+        "uploaded_paths": [
+            "/content/ad-hoc/hankai_storm-promo_book-demo-20260510120000-abcd/01.jpg",
+            "/content/ad-hoc/hankai_storm-promo_book-demo-20260510120000-abcd/02.jpg",
+        ],
+    }
+    args = {
+        "angle": "storm-promo",
+        "media_urls": [
+            "https://api.telegram.org/file/bot.../01.jpg",
+            "https://api.telegram.org/file/bot.../02.jpg",
+        ],
+        "caption": "Storm season is here.",
+        "hashtags": ["roofing", "storm"],
+        "title": "Storm Promo",
+    }
+    with patch.object(publisher_tools.publisher_client, "request", return_value=fake) as mock_req:
+        result = json.loads(_quick_post(args))
+
+    # Result mirrors the publisher response.
+    assert result["post_id"] == "cmp_abc"
+    assert result["dropbox_root_path"].endswith("-abcd")
+    assert len(result["uploaded_paths"]) == 2
+
+    # Verify the call hit the right endpoint with a sane body.
+    mock_req.assert_called_once()
+    call_args = mock_req.call_args
+    assert call_args.args[0] == "POST"
+    assert call_args.args[1] == "/api/ad-hoc/quick-post"
+    body = call_args.kwargs["json"]
+    assert body["angle"] == "storm-promo"
+    assert body["caption"] == "Storm season is here."
+    # Defaults from the Pydantic model.
+    assert body["brand"] == "hankai"
+    assert body["cta"] == "book-demo"
 
 
 def test_publisher_client_error_surfaces_as_tool_error():

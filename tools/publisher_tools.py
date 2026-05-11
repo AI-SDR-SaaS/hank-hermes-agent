@@ -352,6 +352,91 @@ def _ingest_adhoc(args: dict, **_kw: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# publisher_quick_post — one-shot ad-hoc post (upload + caption.md + ingest)
+# ---------------------------------------------------------------------------
+
+QUICK_POST_SCHEMA = {
+    "name": "publisher_quick_post",
+    "description": (
+        "Post ad-hoc creative immediately. Use when Jonathan sends you photos "
+        "(or one video / one image) with a description and wants it on socials "
+        "now. You provide the media URLs (Telegram file URLs work — see "
+        "getFile), the caption you wrote based on his description, optional "
+        "hashtags + title. The publisher uploads everything to Dropbox, writes "
+        "caption.md, and sends Jonathan an approval DM with preview. He taps "
+        "Approve → publishes to IG + TikTok in ~30s.\n\n"
+        "brand/cta default to 'hankai' and 'book-demo'. angle is required and "
+        "should be a short slug describing the post (e.g., 'emergency-storm-promo'). "
+        "No underscores or spaces in brand/angle/cta — use hyphens. The folder "
+        "path gets a server-side timestamp suffix so repeat calls always create "
+        "fresh posts."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "angle": {
+                "type": "string",
+                "description": "Short slug for the post angle (e.g., 'emergency-storm-promo'). Hyphens OK, no underscores.",
+            },
+            "media_urls": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "1–10 publicly fetchable HTTPS URLs to the media (Telegram file URLs, Dropbox temporary links, etc.). Order matters for carousels.",
+                "minItems": 1,
+                "maxItems": 10,
+            },
+            "caption": {
+                "type": "string",
+                "description": "Caption body for the post — Jonathan's description, polished into a punchy caption. Must contain non-whitespace content.",
+            },
+            "title": {
+                "type": "string",
+                "description": "Optional short headline. Only displayed by TikTok on carousel posts; ignored elsewhere.",
+            },
+            "hashtags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Hashtags without leading '#'. Optional.",
+            },
+            "brand": {
+                "type": "string",
+                "description": "Brand segment of the ad-hoc folder name. Default 'hankai'.",
+                "default": "hankai",
+            },
+            "cta": {
+                "type": "string",
+                "description": "CTA segment of the ad-hoc folder name. Default 'book-demo'.",
+                "default": "book-demo",
+            },
+        },
+        "required": ["angle", "media_urls", "caption"],
+    },
+}
+
+
+def _quick_post(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.QuickPostRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    try:
+        body = publisher_client.request(
+            "POST",
+            "/api/ad-hoc/quick-post",
+            json=req.model_dump(exclude_none=True),
+        )
+    except publisher_client.PublisherClientError as e:
+        return _client_error(e)
+    try:
+        resp = t.QuickPostResponse.model_validate(body)
+    except ValidationError as e:
+        return tool_error(
+            f"invalid response from publisher: {e.errors()}", body=body
+        )
+    return tool_result(resp.model_dump())
+
+
+# ---------------------------------------------------------------------------
 # telegram_dm_owner — thin wrapper over send_message_tool
 # ---------------------------------------------------------------------------
 
@@ -455,6 +540,15 @@ registry.register(
     toolset=PUBLISHER_TOOLSET,
     schema=INGEST_ADHOC_SCHEMA,
     handler=lambda args, **kw: _ingest_adhoc(args, **kw),
+    check_fn=publisher_client.check_publisher_requirements,
+    requires_env=_REQUIRES_ENV,
+)
+
+registry.register(
+    name="publisher_quick_post",
+    toolset=PUBLISHER_TOOLSET,
+    schema=QUICK_POST_SCHEMA,
+    handler=lambda args, **kw: _quick_post(args, **kw),
     check_fn=publisher_client.check_publisher_requirements,
     requires_env=_REQUIRES_ENV,
 )
