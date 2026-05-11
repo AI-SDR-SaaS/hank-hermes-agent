@@ -36,7 +36,7 @@ Returns `{ post_id, dropbox_root_path, uploaded_paths }`. The approval DM is alr
 
 3. **Write the caption** in Hank's voice (punchy, trades-floor tone, no corporate fluff, no hyphens for stylistic flair). Don't write multiple "variations" — write ONE caption. Jonathan will reject or iterate in Telegram if he wants different wording.
 
-4. **Add hashtags** (3-8 is fine). Same voice as everything else — `#plumber #hvactech #servicetitan #meethank` over `#smallbusinessowner #entrepreneur #grindset`.
+4. **Add hashtags** (3-8 is fine). **Pass them WITHOUT a leading `#`** — the tool prepends it server-side, and passing `"#plumber"` would render as `##plumber`. Same voice as everything else — prefer `["plumber", "hvactech", "servicetitan", "meethank"]` over `["smallbusinessowner", "entrepreneur", "grindset"]`.
 
 5. **Optionally add a `title`** if it's a carousel — TikTok shows it above the photos. Examples: `Plumber · Sewer Backup Triage`, `Solo · $18/day`. Short, punchy, with a `·` separator. Skip for single video/static posts.
 
