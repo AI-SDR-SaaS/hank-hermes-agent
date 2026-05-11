@@ -42,7 +42,7 @@ These come from Railway env vars — already injected into the process:
 
 - `POSTHOG_PERSONAL_API_KEY` — read-only PostHog scopes
 - `POSTHOG_PROJECT_ID` — numeric, pinned in MCP context
-- `GITHUB_TOKEN` — fine-grained PAT, scoped to the website repo
+- `WEBSITE_GITHUB_TOKEN` — fine-grained PAT, scoped to the website repo only. Kept separate from `GITHUB_TOKEN` (which is for the skills hub) so neither over-permissions the other. Pass it to every `gh` and `git` call in this skill — see Phase 4.
 - `WEBSITE_REPO_URL` — the marketing-site repo to edit (e.g. `https://github.com/AI-SDR-SaaS/ai-assistant-website`)
 - `TELEGRAM_HOME_CHANNEL` — where scheduled digests land
 - `TZ` — `America/New_York`, so cron times match Jonathan's clock
@@ -97,10 +97,18 @@ Do **not** start editing the repo until Jonathan says "do it" or otherwise green
 
 ## Phase 4 — Edit the site (only after green light)
 
-1. **Get the repo.** If `WEBSITE_REPO_URL` clone isn't already in `$HERMES_HOME/workspace/`, clone it there. Re-use across runs — it's a persistent workspace.
+**Auth pattern for all `git` / `gh` calls in this phase:** the website token isn't `GITHUB_TOKEN` — that one is for the skills hub. Always wire `WEBSITE_GITHUB_TOKEN` explicitly:
+- For `gh`: prefix the call with `GH_TOKEN="$WEBSITE_GITHUB_TOKEN"`.
+- For `git` (clone, push, pull): use the token-in-URL form `https://x-access-token:${WEBSITE_GITHUB_TOKEN}@github.com/<owner>/<repo>.git`. This bakes the credential into the remote so subsequent `git fetch` / `git push` from the clone keep working without a credential helper.
+
+1. **Get the repo.** If the clone isn't already in `$HERMES_HOME/workspace/`, clone it there. Re-use across runs — it's a persistent workspace.
    ```
    cd $HERMES_HOME/workspace
-   [ -d ai-assistant-website ] || git clone $WEBSITE_REPO_URL
+   if [ ! -d ai-assistant-website ]; then
+     # Derive the authed URL from WEBSITE_REPO_URL by injecting the token after https://
+     authed_url=$(echo "$WEBSITE_REPO_URL" | sed "s#https://#https://x-access-token:${WEBSITE_GITHUB_TOKEN}@#")
+     git clone "$authed_url"
+   fi
    cd ai-assistant-website
    git fetch origin && git checkout main && git reset --hard origin/main
    ```
@@ -117,7 +125,7 @@ Do **not** start editing the repo until Jonathan says "do it" or otherwise green
 5. **Push & open PR** via `gh`:
    ```
    git push -u origin hermes/2026-05-11-hero-copy
-   gh pr create --title "..." --body "..." --base main
+   GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr create --title "..." --body "..." --base main
    ```
    PR body MUST include the PostHog finding + the Telegram-agreed change so future-Jonathan knows why this exists.
 
@@ -125,8 +133,8 @@ Do **not** start editing the repo until Jonathan says "do it" or otherwise green
 
 After opening the PR, poll for both. Don't spam — wait 60–90s, then check, then wait again if needed. Typical landing time is 1–3 minutes.
 
-- **Vercel preview** via `gh pr checks <PR#>` and `gh pr view <PR#> --json comments`. Look for the `vercel[bot]` deployment comment with a preview URL. Or filter checks for the `Vercel` context.
-- **Cubic review** via `gh pr view <PR#> --json reviews,comments`. Look for the `cubic-dev-ai[bot]` user (or whatever the install names it). Cubic posts a review; capture its summary and any blocking findings.
+- **Vercel preview** via `GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr checks <PR#>` and `GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr view <PR#> --json comments`. Look for the `vercel[bot]` deployment comment with a preview URL. Or filter checks for the `Vercel` context.
+- **Cubic review** via `GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr view <PR#> --json reviews,comments`. Look for the `cubic-dev-ai[bot]` user (or whatever the install names it). Cubic posts a review; capture its summary and any blocking findings.
 
 Once both have landed (or after ~5 min if one is taking unusually long — say so in chat), post a single consolidated message to Telegram:
 
@@ -146,10 +154,10 @@ If Cubic flagged **blocking** issues: don't hide them — surface them and ask b
 
 ## Phase 6 — Merge or iterate
 
-- **"Merge"** → `gh pr merge <PR#> --squash --delete-branch`. Vercel auto-deploys to prod. Reply with the prod URL or "shipped" + a one-line summary. Note the next-window digest will measure whether the change moved the metric.
+- **"Merge"** → `GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr merge <PR#> --squash --delete-branch`. Vercel auto-deploys to prod. Reply with the prod URL or "shipped" + a one-line summary. Note the next-window digest will measure whether the change moved the metric.
 - **"Fix the Cubic notes"** → make the changes on the same branch, push, re-poll, re-report.
 - **"Tweak X first"** → iterate on the same branch.
-- **"Drop it"** → `gh pr close <PR#>` and `git push origin --delete <branch>`. Acknowledge in chat.
+- **"Drop it"** → `GH_TOKEN="$WEBSITE_GITHUB_TOKEN" gh pr close <PR#>` and `git push origin --delete <branch>`. Acknowledge in chat.
 
 ## Boundaries
 

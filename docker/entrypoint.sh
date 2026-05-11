@@ -152,9 +152,24 @@ if mcp_idx is None:
         text += "\n"
     text += block
 else:
-    # Existing mcp_servers — insert the posthog entry just after that key.
-    # We use a trimmed variant (no "mcp_servers:" line) and rely on YAML
-    # indentation. Markers stay so the idempotence check works.
+    # Existing mcp_servers — only splice if it's block style. Flow-style
+    # variants like `mcp_servers: {}` or `mcp_servers: {github: {...}}`
+    # would produce invalid YAML if we inserted indented block children
+    # under them, so we bail with a clear message instead.
+    head = lines[mcp_idx]
+    after_colon = head.split(":", 1)[1] if ":" in head else ""
+    after_colon = after_colon.split("#", 1)[0].strip()  # ignore trailing comment
+    if after_colon:
+        import sys
+        print(
+            f"entrypoint: refusing to splice into flow-style/scalar mcp_servers "
+            f"in {path} (line {mcp_idx + 1}: {head.rstrip()!r}). "
+            f"Add the posthog stanza manually, or convert mcp_servers to "
+            f"block style and re-run.",
+            file=sys.stderr,
+        )
+        raise SystemExit(0)
+    # Block style — insert the posthog entry just after the key line.
     insert = """  # --- posthog mcp (managed) ---
   posthog:
     url: https://mcp.posthog.com/mcp/
