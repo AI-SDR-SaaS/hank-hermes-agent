@@ -149,10 +149,14 @@ class IngestAdHocResponse(BaseModel):
 
 class QuickPostRequest(BaseModel):
     """One-shot ad-hoc post: agent sends media URLs + caption, publisher
-    uploads to Dropbox, writes caption.md, triggers ingest → Telegram
-    approval DM. The Dropbox folder gets a unique timestamp+random
-    suffix server-side, so identical brand/angle/cta inputs always
-    produce distinct posts.
+    uploads to Dropbox, writes caption.md, then either triggers a Telegram
+    approval DM (auto_publish=false) OR publishes immediately
+    (auto_publish=true). The Hermes ad-hoc flow uses auto_publish=true
+    because Ace collects the user's caption-choice approval in chat
+    upstream, so the publisher's Telegram DM would be a redundant second
+    step. The Dropbox folder gets a unique timestamp+random suffix
+    server-side, so identical brand/angle/cta inputs always produce
+    distinct posts.
 
     Validation mirrors the publisher's Zod schema so the agent fails
     fast on bad inputs instead of round-tripping a 400."""
@@ -165,9 +169,16 @@ class QuickPostRequest(BaseModel):
     cta: str = Field(default="book-demo", pattern=r"^[^_/\s]+$")
     title: str | None = None
     hashtags: list[str] = Field(default_factory=list)
+    auto_publish: bool = False
+
+
+class QuickPostPublishOutcome(BaseModel):
+    kind: str
+    zernio_post_id: str | None = None
 
 
 class QuickPostResponse(BaseModel):
     post_id: str
     dropbox_root_path: str
     uploaded_paths: list[str] = Field(default_factory=list)
+    publish_outcome: QuickPostPublishOutcome | None = None

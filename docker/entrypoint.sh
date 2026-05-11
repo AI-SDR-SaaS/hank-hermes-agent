@@ -109,6 +109,65 @@ if [ ! -f "$HERMES_HOME/SOUL.md" ]; then
     cp "$INSTALL_DIR/docker/SOUL.md" "$HERMES_HOME/SOUL.md"
 fi
 
+# Idempotently patch the marketing-voice files so the publisher_quick_post
+# workflow doesn't conflict with the "drafts only, never post live" rules.
+# Replacements only fire when the exact OLD strings are still present —
+# once changed, this block becomes a no-op. If Jonathan rewrites the
+# rules in his own wording, we leave them alone.
+if [ -f "$HERMES_HOME/SOUL.md" ] || [ -f "$HERMES_HOME/AGENTS.md" ]; then
+    HERMES_HOME="$HERMES_HOME" python3 <<'PY_EOF'
+import os
+HOME = os.environ.get("HERMES_HOME", "/opt/data")
+
+def patch(path, edits):
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        s = f.read()
+    changed = False
+    for old, new in edits:
+        if old in s:
+            s = s.replace(old, new)
+            changed = True
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(s)
+        print(f"entrypoint: patched publisher_quick_post carve-out into {path}")
+
+patch(
+    f"{HOME}/SOUL.md",
+    [
+        (
+            "You never publish, send, or post anything live. Jonathan approves everything. Drafts only.",
+            "You never publish content directly. Jonathan approves every post before it goes live. "
+            "For ad-hoc social posts: read the image, draft 3 caption variations, let Jonathan pick one in chat, "
+            "then call publisher_quick_post with auto_publish=true. His chat-side pick IS the approval, "
+            "so the publisher skips its own Telegram DM and ships. This is the gate, not a bypass.",
+        ),
+    ],
+)
+
+patch(
+    f"{HOME}/AGENTS.md",
+    [
+        (
+            "- Save all drafts to the location Jonathan specifies (Notion, Airtable, etc.). Never publish or post anything.",
+            "- For ad-hoc social posts (Jonathan DMs photos asking to post): draft 3 caption variations in chat, "
+            "wait for him to pick, then call publisher_quick_post with auto_publish=true. The publisher uploads "
+            "to Dropbox, writes caption.md, and ships to IG + TikTok. Do not also save to Airtable. "
+            "For all other drafts (blog, ads, email, research): save to the location Jonathan specifies.",
+        ),
+        (
+            "- Never auto-publish, auto-send, or auto-post. Drafts only.",
+            "- Never auto-publish without Jonathan's review. For ad-hoc social posts, his pick from your 3 "
+            "caption variations IS the review, and publisher_quick_post(auto_publish=true) is how you ship "
+            "the picked caption. For everything else: drafts only, no auto-send.",
+        ),
+    ],
+)
+PY_EOF
+fi
+
 # Sync bundled skills (manifest-based so user edits are preserved)
 if [ -d "$INSTALL_DIR/skills" ]; then
     python3 "$INSTALL_DIR/tools/skills_sync.py"

@@ -358,16 +358,18 @@ def _ingest_adhoc(args: dict, **_kw: Any) -> str:
 QUICK_POST_SCHEMA = {
     "name": "publisher_quick_post",
     "description": (
-        "Post ad-hoc creative immediately. Use when Jonathan sends you photos "
-        "(or one video / one image) with a description and wants it on socials "
-        "now. You provide the media URLs (Telegram file URLs work — see "
-        "getFile), the caption you wrote based on his description, optional "
-        "hashtags + title. The publisher uploads everything to Dropbox, writes "
-        "caption.md, and sends Jonathan an approval DM with preview. He taps "
-        "Approve → publishes to IG + TikTok in ~30s.\n\n"
+        "Post ad-hoc creative AFTER Jonathan has approved a caption "
+        "(e.g., he picked from your 3 variations in chat). Provide the "
+        "media URLs (Telegram file URLs via getFile work), the approved "
+        "caption text, optional hashtags + title. For the ad-hoc chat "
+        "flow pass auto_publish=true: Jonathan's caption choice IS his "
+        "approval, so the publisher skips its own Telegram DM and ships "
+        "to IG + TikTok in ~30s. Only set auto_publish=false if there's "
+        "a specific reason to route through the publisher bot's separate "
+        "approval gate.\n\n"
         "brand/cta default to 'hankai' and 'book-demo'. angle is required and "
         "should be a short slug describing the post (e.g., 'emergency-storm-promo'). "
-        "No underscores or spaces in brand/angle/cta — use hyphens. The folder "
+        "No underscores or spaces in brand/angle/cta. Use hyphens. The folder "
         "path gets a server-side timestamp suffix so repeat calls always create "
         "fresh posts."
     ),
@@ -381,13 +383,13 @@ QUICK_POST_SCHEMA = {
             "media_urls": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "1–10 publicly fetchable HTTPS URLs to the media (Telegram file URLs, Dropbox temporary links, etc.). Order matters for carousels.",
+                "description": "1-10 publicly fetchable HTTPS URLs to the media (Telegram file URLs, Dropbox temporary links, etc.). Order matters for carousels.",
                 "minItems": 1,
                 "maxItems": 10,
             },
             "caption": {
                 "type": "string",
-                "description": "Caption body for the post — Jonathan's description, polished into a punchy caption. Must contain non-whitespace content.",
+                "description": "The caption Jonathan approved (typically the variation he picked from your 3 drafts). Must contain non-whitespace content.",
             },
             "title": {
                 "type": "string",
@@ -396,7 +398,7 @@ QUICK_POST_SCHEMA = {
             "hashtags": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Hashtags without leading '#'. Optional.",
+                "description": "Hashtags WITHOUT leading '#'. The publisher prepends '#' server-side. Optional.",
             },
             "brand": {
                 "type": "string",
@@ -407,6 +409,11 @@ QUICK_POST_SCHEMA = {
                 "type": "string",
                 "description": "CTA segment of the ad-hoc folder name. Default 'book-demo'.",
                 "default": "book-demo",
+            },
+            "auto_publish": {
+                "type": "boolean",
+                "description": "When true, publisher skips its Telegram approval DM and ships immediately to IG + TikTok. Use true for the ad-hoc chat flow where Jonathan already approved the caption in chat. Default false.",
+                "default": False,
             },
         },
         "required": ["angle", "media_urls", "caption"],
