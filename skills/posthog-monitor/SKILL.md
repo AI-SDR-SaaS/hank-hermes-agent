@@ -101,15 +101,17 @@ Do **not** start editing the repo until Jonathan says "do it" or otherwise green
 - For `gh`: prefix the call with `GH_TOKEN="$WEBSITE_GITHUB_TOKEN"`.
 - For `git` (clone, push, pull): use the token-in-URL form `https://x-access-token:${WEBSITE_GITHUB_TOKEN}@github.com/<owner>/<repo>.git`. This bakes the credential into the remote so subsequent `git fetch` / `git push` from the clone keep working without a credential helper.
 
-1. **Get the repo.** If the clone isn't already in `$HERMES_HOME/workspace/`, clone it there. Re-use across runs — it's a persistent workspace.
+1. **Get the repo.** If the clone isn't already in `$HERMES_HOME/workspace/`, clone it there. Re-use across runs — it's a persistent workspace. Always normalize the `origin` URL with the current token *after* the clone check, so rotated tokens and pre-existing untokenized clones don't break fetch/push.
    ```
    cd $HERMES_HOME/workspace
+   # Derive the authed URL from WEBSITE_REPO_URL by injecting the token after https://
+   authed_url=$(echo "$WEBSITE_REPO_URL" | sed "s#https://#https://x-access-token:${WEBSITE_GITHUB_TOKEN}@#")
    if [ ! -d ai-assistant-website ]; then
-     # Derive the authed URL from WEBSITE_REPO_URL by injecting the token after https://
-     authed_url=$(echo "$WEBSITE_REPO_URL" | sed "s#https://#https://x-access-token:${WEBSITE_GITHUB_TOKEN}@#")
      git clone "$authed_url"
    fi
    cd ai-assistant-website
+   # Re-apply on every run so a rotated token or an earlier untokenized clone is healed.
+   git remote set-url origin "$authed_url"
    git fetch origin && git checkout main && git reset --hard origin/main
    ```
 2. **Branch.** Name: `hermes/<yyyy-mm-dd>-<short-desc>`. Example: `hermes/2026-05-11-hero-copy`.
