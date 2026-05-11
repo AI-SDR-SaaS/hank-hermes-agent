@@ -104,6 +104,75 @@ platforms:
 EOF
 fi
 
+# Idempotently inject the PostHog MCP server stanza into config.yaml.
+# Runs only when POSTHOG_PERSONAL_API_KEY is set and the server isn't already
+# registered, so manual edits and reruns are safe. The values are written as
+# ${VAR} templates so Hermes's _expand_env_vars() substitutes them at config
+# load time — no secrets get baked into config.yaml on disk.
+if [ -n "$POSTHOG_PERSONAL_API_KEY" ] && \
+   [ -f "$HERMES_HOME/config.yaml" ] && \
+   ! grep -q "# --- posthog mcp (managed) ---" "$HERMES_HOME/config.yaml"; then
+    echo "Injecting PostHog MCP stanza into $HERMES_HOME/config.yaml"
+    HERMES_HOME="$HERMES_HOME" python3 <<'PY_EOF'
+import os
+from pathlib import Path
+
+path = Path(os.environ["HERMES_HOME"]) / "config.yaml"
+text = path.read_text(encoding="utf-8")
+
+block = """
+# --- posthog mcp (managed) ---
+# Injected by docker/entrypoint.sh when POSTHOG_PERSONAL_API_KEY is set.
+# Edit-safe: the entrypoint won't touch this once present. To remove, delete
+# from "# --- posthog mcp (managed) ---" through the closing "# --- end posthog mcp ---".
+mcp_servers:
+  posthog:
+    url: https://mcp.posthog.com/mcp/
+    transport: streamable-http
+    headers:
+      Authorization: "Bearer ${POSTHOG_PERSONAL_API_KEY}"
+    pinned_context:
+      projectId: "${POSTHOG_PROJECT_ID}"
+# --- end posthog mcp ---
+"""
+
+# If there's already an mcp_servers: block, splice the posthog entry under it.
+# Otherwise append the whole managed block at EOF.
+lines = text.splitlines(keepends=True)
+mcp_idx = None
+for i, line in enumerate(lines):
+    stripped = line.rstrip("\n")
+    if stripped == "mcp_servers:" or stripped.startswith("mcp_servers:"):
+        mcp_idx = i
+        break
+
+if mcp_idx is None:
+    # No existing top-level mcp_servers — append the whole block
+    if not text.endswith("\n"):
+        text += "\n"
+    text += block
+else:
+    # Existing mcp_servers — insert the posthog entry just after that key.
+    # We use a trimmed variant (no "mcp_servers:" line) and rely on YAML
+    # indentation. Markers stay so the idempotence check works.
+    insert = """  # --- posthog mcp (managed) ---
+  posthog:
+    url: https://mcp.posthog.com/mcp/
+    transport: streamable-http
+    headers:
+      Authorization: "Bearer ${POSTHOG_PERSONAL_API_KEY}"
+    pinned_context:
+      projectId: "${POSTHOG_PROJECT_ID}"
+  # --- end posthog mcp ---
+"""
+    lines.insert(mcp_idx + 1, insert)
+    text = "".join(lines)
+
+path.write_text(text, encoding="utf-8")
+print(f"entrypoint: posthog mcp stanza injected into {path}")
+PY_EOF
+fi
+
 # SOUL.md
 if [ ! -f "$HERMES_HOME/SOUL.md" ]; then
     cp "$INSTALL_DIR/docker/SOUL.md" "$HERMES_HOME/SOUL.md"
