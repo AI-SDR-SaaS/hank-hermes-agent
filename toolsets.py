@@ -228,6 +228,18 @@ TOOLSETS = {
         "includes": [],
     },
 
+    "posthog": {
+        "description": "PostHog REST API tools — HogQL queries, session recordings, error tracking, feature flags, dashboards. Gated on POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID.",
+        "tools": [
+            "posthog_query",
+            "posthog_list_recordings",
+            "posthog_list_errors",
+            "posthog_list_feature_flags",
+            "posthog_get_dashboard",
+        ],
+        "includes": [],
+    },
+
     "airtable": {
         "description": "Content log writer — Airtable when AIRTABLE_* env vars set, JSONL fallback otherwise.",
         "tools": ["airtable_log_post"],
@@ -345,9 +357,9 @@ TOOLSETS = {
     },
     
     "hermes-cli": {
-        "description": "Full interactive CLI toolset - all default tools plus cronjob management, publisher, airtable",
+        "description": "Full interactive CLI toolset - all default tools plus cronjob management, publisher, airtable, posthog",
         "tools": _HERMES_CORE_TOOLS,
-        "includes": ["publisher", "airtable"]
+        "includes": ["publisher", "airtable", "posthog"]
     },
 
     "hermes-cron": {
@@ -368,12 +380,12 @@ TOOLSETS = {
     },
     
     "hermes-discord": {
-        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval), publisher + airtable for content workflow",
+        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval), publisher + airtable + posthog for content + monitoring workflow",
         "tools": _HERMES_CORE_TOOLS + [
             "discord",
             "discord_admin",
         ],
-        "includes": ["publisher", "airtable"]
+        "includes": ["publisher", "airtable", "posthog"]
     },
     
     "hermes-whatsapp": {
