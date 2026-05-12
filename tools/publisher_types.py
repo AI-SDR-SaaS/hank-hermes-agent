@@ -182,3 +182,20 @@ class QuickPostResponse(BaseModel):
     dropbox_root_path: str
     uploaded_paths: list[str] = Field(default_factory=list)
     publish_outcome: QuickPostPublishOutcome | None = None
+
+
+class QuickPostFileRequest(BaseModel):
+    """Same shape as QuickPostRequest but with local file paths instead of
+    URLs. Used by the publisher_quick_post_file tool to ship Telegram-
+    cached photos (which don't have a public URL) directly via multipart
+    upload to the publisher. The tool reads each path from disk and
+    forwards the bytes."""
+
+    angle: str = Field(min_length=1, pattern=r"^[^_/\s]+$")
+    media_file_paths: list[str] = Field(min_length=1, max_length=10)
+    caption: str = Field(min_length=1)
+    brand: str = Field(default="hankai", pattern=r"^[^_/\s]+$")
+    cta: str = Field(default="book-demo", pattern=r"^[^_/\s]+$")
+    title: str | None = None
+    hashtags: list[str] = Field(default_factory=list)
+    auto_publish: bool = False

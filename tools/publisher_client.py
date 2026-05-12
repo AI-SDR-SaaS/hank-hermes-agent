@@ -137,3 +137,64 @@ def request(
         raise PublisherClientError(503, f"publisher unavailable: {e}") from e
     except _TRANSIENT_NETWORK_ERRORS as e:
         raise PublisherClientError(0, f"publisher network error: {e}") from e
+
+
+def request_multipart(
+    path: str,
+    *,
+    files: list[tuple[str, tuple[str, bytes, str]]],
+    data: dict | None = None,
+) -> dict:
+    """POST a multipart/form-data request to the publisher.
+
+    ``files`` is a list of ``("media", ("filename.ext", bytes, "mime/type"))``
+    tuples — repeating the same field name lets httpx build a single form
+    with multiple files. Used by ``publisher_quick_post_file`` to ship
+    Telegram-cached photos to the publisher without needing a public URL.
+
+    A fresh httpx client per call so the default JSON Content-Type from
+    the standard client doesn't shadow the multipart boundary httpx sets
+    automatically when ``files=`` is passed.
+    """
+    logger.debug("publisher POST %s (multipart, %d files)", path, len(files))
+    base_url = os.getenv("PUBLISHER_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("PUBLISHER_API_KEY", "")
+    try:
+        with httpx.Client(
+            base_url=base_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json",
+            },
+            timeout=DEFAULT_TIMEOUT,
+        ) as client:
+            response = client.post(path, files=files, data=data or {})
+    except _TRANSIENT_NETWORK_ERRORS as e:
+        raise PublisherClientError(0, f"publisher network error: {e}") from e
+
+    if 500 <= response.status_code < 600:
+        raise PublisherClientError(
+            503, f"publisher unavailable: POST {path} -> {response.status_code}"
+        )
+
+    if not response.is_success:
+        body: Any
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text[:500]
+        raise PublisherClientError(
+            response.status_code,
+            f"publisher POST {path} -> {response.status_code}",
+            body=body,
+        )
+
+    if not response.content:
+        return {}
+
+    try:
+        return response.json()
+    except ValueError as e:
+        raise PublisherClientError(
+            response.status_code, f"publisher returned invalid JSON: {e}"
+        ) from e
