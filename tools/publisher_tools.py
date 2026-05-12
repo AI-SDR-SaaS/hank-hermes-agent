@@ -520,6 +520,14 @@ _MIME_BY_EXT = {
     ".mov": "video/quicktime",
 }
 
+# Directories the agent is allowed to read media from. The Telegram adapter
+# caches incoming attachments under /opt/data/cache/, and that's the only
+# place Hermes legitimately produces uploadable media. Restricting reads
+# to these prefixes blocks the agent from being tricked (prompt injection)
+# or buggily instructed into uploading SOUL.md, .env, /etc/passwd, etc. —
+# once uploaded with auto_publish=true, content goes straight to social.
+_ALLOWED_MEDIA_ROOTS = ("/opt/data/cache/",)
+
 
 def _quick_post_file(args: dict, **_kw: Any) -> str:
     try:
@@ -532,19 +540,33 @@ def _quick_post_file(args: dict, **_kw: Any) -> str:
     # errors than tracebacks.
     files: list[tuple[str, tuple[str, bytes, str]]] = []
     for p in req.media_file_paths:
-        if not os.path.isfile(p):
+        # Realpath collapses symlinks and ".." segments so an attacker
+        # can't slip /opt/data/cache/../SOUL.md past the prefix check.
+        real_p = os.path.realpath(p)
+        if not any(real_p.startswith(root) for root in _ALLOWED_MEDIA_ROOTS):
+            return tool_error(
+                f"path outside allowed media directory: {p}",
+                hint=(
+                    "Only files under "
+                    + ", ".join(_ALLOWED_MEDIA_ROOTS)
+                    + " may be uploaded. Telegram-cached photos live in "
+                    "/opt/data/cache/images/."
+                ),
+                allowed_roots=list(_ALLOWED_MEDIA_ROOTS),
+            )
+        if not os.path.isfile(real_p):
             return tool_error(
                 f"file not found: {p}",
                 hint="Telegram-cached photos live under /opt/data/cache/images/",
             )
         try:
-            with open(p, "rb") as f:
+            with open(real_p, "rb") as f:
                 content = f.read()
         except OSError as e:
             return tool_error(f"could not read {p}: {e}")
-        ext = os.path.splitext(p)[1].lower()
+        ext = os.path.splitext(real_p)[1].lower()
         mime = _MIME_BY_EXT.get(ext, "application/octet-stream")
-        filename = os.path.basename(p)
+        filename = os.path.basename(real_p)
         files.append(("media", (filename, content, mime)))
 
     # Form fields are always strings on the multipart side; the

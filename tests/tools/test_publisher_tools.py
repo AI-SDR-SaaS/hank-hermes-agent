@@ -6,6 +6,7 @@ parseable JSON when the publisher client is mocked.
 """
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -291,12 +292,20 @@ def test_quick_post_file_rejects_empty_media_file_paths():
     assert "error" in result
 
 
-def test_quick_post_file_returns_clear_error_on_missing_file():
+def test_quick_post_file_returns_clear_error_on_missing_file(tmp_path, monkeypatch):
+    # Point the allowlist at a real existing dir, then ask for a file
+    # inside it that doesn't exist. Triggers the "not found" branch
+    # (without hitting the security block first).
+    monkeypatch.setattr(
+        publisher_tools,
+        "_ALLOWED_MEDIA_ROOTS",
+        (str(tmp_path) + os.sep,),
+    )
     result = json.loads(
         _quick_post_file(
             {
                 "angle": "storm",
-                "media_file_paths": ["/nope/does/not/exist.jpg"],
+                "media_file_paths": [str(tmp_path / "does-not-exist.jpg")],
                 "caption": "Body",
             }
         )
@@ -305,7 +314,37 @@ def test_quick_post_file_returns_clear_error_on_missing_file():
     assert "file not found" in result["error"]
 
 
-def test_quick_post_file_happy_path(tmp_path):
+def test_quick_post_file_blocks_paths_outside_allowed_roots(tmp_path):
+    # File exists and is readable, but lives outside the allowlist —
+    # tool must refuse without reading or uploading. Security regression
+    # test for the original P0 (arbitrary local-file exfiltration).
+    secret = tmp_path / "fake-soul.md"
+    secret.write_bytes(b"sensitive contents that must not ship")
+    with patch.object(
+        publisher_tools.publisher_client, "request_multipart"
+    ) as mock_req:
+        result = json.loads(
+            _quick_post_file(
+                {
+                    "angle": "storm",
+                    "media_file_paths": [str(secret)],
+                    "caption": "Body",
+                }
+            )
+        )
+    assert "error" in result
+    assert "outside allowed media directory" in result["error"]
+    mock_req.assert_not_called()
+
+
+def test_quick_post_file_happy_path(tmp_path, monkeypatch):
+    # Allow tmp_path so the test doesn't have to write under /opt/data/cache/
+    # on the test host. os.sep keeps the prefix portable across Linux/Windows.
+    monkeypatch.setattr(
+        publisher_tools,
+        "_ALLOWED_MEDIA_ROOTS",
+        (str(tmp_path) + os.sep,),
+    )
     f1 = tmp_path / "img1.jpg"
     f2 = tmp_path / "img2.png"
     f1.write_bytes(b"img1-bytes")

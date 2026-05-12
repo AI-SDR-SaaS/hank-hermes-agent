@@ -139,42 +139,33 @@ def request(
         raise PublisherClientError(0, f"publisher network error: {e}") from e
 
 
-def request_multipart(
+@retry(
+    reraise=True,
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4.0),
+    retry=retry_if_exception_type(_RETRYABLE),
+)
+def _request_multipart_once(
     path: str,
     *,
     files: list[tuple[str, tuple[str, bytes, str]]],
     data: dict | None = None,
 ) -> dict:
-    """POST a multipart/form-data request to the publisher.
-
-    ``files`` is a list of ``("media", ("filename.ext", bytes, "mime/type"))``
-    tuples — repeating the same field name lets httpx build a single form
-    with multiple files. Used by ``publisher_quick_post_file`` to ship
-    Telegram-cached photos to the publisher without needing a public URL.
-
-    A fresh httpx client per call so the default JSON Content-Type from
-    the standard client doesn't shadow the multipart boundary httpx sets
-    automatically when ``files=`` is passed.
-    """
-    logger.debug("publisher POST %s (multipart, %d files)", path, len(files))
     base_url = os.getenv("PUBLISHER_BASE_URL", "").rstrip("/")
     api_key = os.getenv("PUBLISHER_API_KEY", "")
-    try:
-        with httpx.Client(
-            base_url=base_url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Accept": "application/json",
-            },
-            timeout=DEFAULT_TIMEOUT,
-        ) as client:
-            response = client.post(path, files=files, data=data or {})
-    except _TRANSIENT_NETWORK_ERRORS as e:
-        raise PublisherClientError(0, f"publisher network error: {e}") from e
+    with httpx.Client(
+        base_url=base_url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+        timeout=DEFAULT_TIMEOUT,
+    ) as client:
+        response = client.post(path, files=files, data=data or {})
 
     if 500 <= response.status_code < 600:
-        raise PublisherClientError(
-            503, f"publisher unavailable: POST {path} -> {response.status_code}"
+        raise _RetryableHTTPError(
+            f"publisher POST {path} -> {response.status_code}"
         )
 
     if not response.is_success:
@@ -198,3 +189,30 @@ def request_multipart(
         raise PublisherClientError(
             response.status_code, f"publisher returned invalid JSON: {e}"
         ) from e
+
+
+def request_multipart(
+    path: str,
+    *,
+    files: list[tuple[str, tuple[str, bytes, str]]],
+    data: dict | None = None,
+) -> dict:
+    """POST a multipart/form-data request to the publisher.
+
+    ``files`` is a list of ``("media", ("filename.ext", bytes, "mime/type"))``
+    tuples — repeating the same field name lets httpx build a single form
+    with multiple files. Used by ``publisher_quick_post_file`` to ship
+    Telegram-cached photos to the publisher without needing a public URL.
+
+    Same retry budget (3 attempts, exponential backoff on transient
+    network errors and 5xx) as ``request()``. Fresh httpx client per
+    call so the standard client's JSON Content-Type doesn't shadow the
+    multipart boundary httpx sets automatically when files= is passed.
+    """
+    logger.debug("publisher POST %s (multipart, %d files)", path, len(files))
+    try:
+        return _request_multipart_once(path, files=files, data=data)
+    except _RetryableHTTPError as e:
+        raise PublisherClientError(503, f"publisher unavailable: {e}") from e
+    except _TRANSIENT_NETWORK_ERRORS as e:
+        raise PublisherClientError(0, f"publisher network error: {e}") from e
