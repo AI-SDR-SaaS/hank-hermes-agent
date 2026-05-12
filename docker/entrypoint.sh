@@ -127,7 +127,7 @@ block = """
 # from "# --- posthog mcp (managed) ---" through the closing "# --- end posthog mcp ---".
 mcp_servers:
   posthog:
-    url: https://mcp.posthog.com/mcp/
+    url: https://mcp.posthog.com/mcp
     transport: streamable-http
     headers:
       Authorization: "Bearer ${POSTHOG_PERSONAL_API_KEY}"
@@ -172,7 +172,7 @@ else:
     # Block style — insert the posthog entry just after the key line.
     insert = """  # --- posthog mcp (managed) ---
   posthog:
-    url: https://mcp.posthog.com/mcp/
+    url: https://mcp.posthog.com/mcp
     transport: streamable-http
     headers:
       Authorization: "Bearer ${POSTHOG_PERSONAL_API_KEY}"
