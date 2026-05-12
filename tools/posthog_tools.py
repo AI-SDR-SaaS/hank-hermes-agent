@@ -337,7 +337,9 @@ GET_DASHBOARD_SCHEMA = {
 
 def _get_dashboard(args: dict, **_kw: Any) -> str:
     dashboard_id = args.get("dashboard_id")
-    if not isinstance(dashboard_id, int):
+    # bool is a subclass of int in Python, so isinstance(True, int) is True.
+    # Explicitly reject booleans so True/False don't become /dashboards/True/.
+    if isinstance(dashboard_id, bool) or not isinstance(dashboard_id, int):
         return tool_error("'dashboard_id' must be an integer")
     try:
         body = posthog_client.project_request(

@@ -123,8 +123,13 @@ text = path.read_text(encoding="utf-8")
 # under-mcp_servers spliced block (when one existed). Both are bracketed by
 # the same marker comments. Match minimally between the start and end markers,
 # tolerating leading whitespace on either marker line.
+#
+# Don't eat the newline BEFORE the start marker — if we did, an adjacent key
+# above the block would merge onto the same line as whatever came after the
+# end marker, breaking YAML. Eating the newline AFTER the end marker is safe
+# because the start marker's own line already begins on a fresh line.
 pattern = re.compile(
-    r"\n?[ \t]*# --- posthog mcp \(managed\) ---\n"
+    r"[ \t]*# --- posthog mcp \(managed\) ---\n"
     r".*?"
     r"[ \t]*# --- end posthog mcp ---\n?",
     re.DOTALL,
