@@ -6,6 +6,7 @@ parseable JSON when the publisher client is mocked.
 """
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -21,6 +22,7 @@ from tools.publisher_tools import (
     _publish_post,
     _queue_post,
     _quick_post,
+    _quick_post_file,
 )
 from tools.registry import registry
 
@@ -40,6 +42,7 @@ from tools.registry import registry
         "publisher_list_pending",
         "publisher_ingest_adhoc",
         "publisher_quick_post",
+        "publisher_quick_post_file",
         "telegram_dm_owner",
     ],
 )
@@ -268,6 +271,129 @@ def test_quick_post_happy_path():
     # Defaults from the Pydantic model.
     assert body["brand"] == "hankai"
     assert body["cta"] == "book-demo"
+
+
+# ---------------------------------------------------------------------------
+# publisher_quick_post_file (multipart upload)
+# ---------------------------------------------------------------------------
+
+
+def test_quick_post_file_rejects_missing_required_fields():
+    result = json.loads(_quick_post_file({}))
+    assert "error" in result
+
+
+def test_quick_post_file_rejects_empty_media_file_paths():
+    result = json.loads(
+        _quick_post_file(
+            {"angle": "storm", "media_file_paths": [], "caption": "Body"}
+        )
+    )
+    assert "error" in result
+
+
+def test_quick_post_file_returns_clear_error_on_missing_file(tmp_path, monkeypatch):
+    # Point the allowlist at a real existing dir, then ask for a file
+    # inside it that doesn't exist. Triggers the "not found" branch
+    # (without hitting the security block first).
+    monkeypatch.setattr(
+        publisher_tools,
+        "_ALLOWED_MEDIA_ROOTS",
+        (str(tmp_path) + os.sep,),
+    )
+    result = json.loads(
+        _quick_post_file(
+            {
+                "angle": "storm",
+                "media_file_paths": [str(tmp_path / "does-not-exist.jpg")],
+                "caption": "Body",
+            }
+        )
+    )
+    assert "error" in result
+    assert "file not found" in result["error"]
+
+
+def test_quick_post_file_blocks_paths_outside_allowed_roots(tmp_path):
+    # File exists and is readable, but lives outside the allowlist —
+    # tool must refuse without reading or uploading. Security regression
+    # test for the original P0 (arbitrary local-file exfiltration).
+    secret = tmp_path / "fake-soul.md"
+    secret.write_bytes(b"sensitive contents that must not ship")
+    with patch.object(
+        publisher_tools.publisher_client, "request_multipart"
+    ) as mock_req:
+        result = json.loads(
+            _quick_post_file(
+                {
+                    "angle": "storm",
+                    "media_file_paths": [str(secret)],
+                    "caption": "Body",
+                }
+            )
+        )
+    assert "error" in result
+    assert "outside allowed media directory" in result["error"]
+    mock_req.assert_not_called()
+
+
+def test_quick_post_file_happy_path(tmp_path, monkeypatch):
+    # Allow tmp_path so the test doesn't have to write under /opt/data/cache/
+    # on the test host. os.sep keeps the prefix portable across Linux/Windows.
+    monkeypatch.setattr(
+        publisher_tools,
+        "_ALLOWED_MEDIA_ROOTS",
+        (str(tmp_path) + os.sep,),
+    )
+    f1 = tmp_path / "img1.jpg"
+    f2 = tmp_path / "img2.png"
+    f1.write_bytes(b"img1-bytes")
+    f2.write_bytes(b"img2-bytes")
+
+    fake_response = {
+        "post_id": "cmp_abc",
+        "dropbox_root_path": "/content/ad-hoc/hankai_storm-promo_book-demo-x",
+        "uploaded_paths": [
+            "/content/ad-hoc/.../01.jpg",
+            "/content/ad-hoc/.../02.png",
+        ],
+        "publish_outcome": {"kind": "ok", "zernio_post_id": "zern_xyz"},
+    }
+    args = {
+        "angle": "storm-promo",
+        "media_file_paths": [str(f1), str(f2)],
+        "caption": "Storm season.",
+        "hashtags": ["roofing", "storm"],
+        "title": "Storm Promo",
+        "auto_publish": True,
+    }
+    with patch.object(
+        publisher_tools.publisher_client,
+        "request_multipart",
+        return_value=fake_response,
+    ) as mock_req:
+        result = json.loads(_quick_post_file(args))
+
+    assert result["post_id"] == "cmp_abc"
+    assert result["publish_outcome"]["kind"] == "ok"
+
+    mock_req.assert_called_once()
+    call_kwargs = mock_req.call_args.kwargs
+    assert mock_req.call_args.args[0] == "/api/ad-hoc/quick-post-file"
+    files = call_kwargs["files"]
+    assert len(files) == 2
+    assert files[0][0] == "media"
+    assert files[0][1][0] == "img1.jpg"
+    assert files[0][1][1] == b"img1-bytes"
+    assert files[0][1][2] == "image/jpeg"
+    assert files[1][1][2] == "image/png"
+
+    data = call_kwargs["data"]
+    assert data["angle"] == "storm-promo"
+    assert data["caption"] == "Storm season."
+    assert data["auto_publish"] == "true"
+    assert json.loads(data["hashtags"]) == ["roofing", "storm"]
+    assert data["title"] == "Storm Promo"
 
 
 def test_publisher_client_error_surfaces_as_tool_error():

@@ -14,33 +14,37 @@ When Jonathan DMs you 1-N photos (or a single video) and any message that reads 
 1. **Read the image/video.** You have vision. Actually look at it before drafting.
 2. **Draft 3 caption variations** in Hank's voice, each with a different angle (per your existing "Output 3 distinct variations" rule). Show them to Jonathan in chat. Each variation should be one approved-to-ship caption, not a sketch.
 3. **Wait for Jonathan to pick one** (or iterate). His pick IS the approval.
-4. **Once he picks, call `publisher_quick_post` with `auto_publish=true`.** The publisher uploads media to Dropbox, writes caption.md, and ships immediately to IG + TikTok. No second approval DM.
+4. **Once he picks, call `publisher_quick_post_file` with `auto_publish=true`** (or `publisher_quick_post` if you have URLs not local paths — see "The tool" section). The publisher uploads media to Dropbox, writes caption.md, and ships immediately to IG + TikTok. No second approval DM.
 5. **Confirm in chat** with the post_id and zernio_post_id from the tool response. Reply concisely; the post is already live.
 
-## The tool
+## The tool (pick one based on media source)
+
+**For Telegram-attached photos/videos — default for this flow:** Hermes caches each attachment at `/opt/data/cache/images/img_<hash>.<ext>`. Pass those paths directly to `publisher_quick_post_file`:
 
 ```
-publisher_quick_post(
-  angle="<short-slug>",                   # required, e.g. "logo-rebrand-tease"
-  media_urls=[<https URLs>, ...],         # required, 1-10 fetchable URLs
-  caption="<the variation Jonathan picked>",  # required, non-whitespace
-  title="<optional short headline>",      # optional, only used by TikTok carousels
-  hashtags=["tag1", "tag2", ...],         # optional, NO leading #
-  auto_publish=True,                      # always true for this flow
-  # brand defaults to "hankai", cta defaults to "book-demo" — usually skip
+publisher_quick_post_file(
+  angle="<short-slug>",                          # required
+  media_file_paths=["/opt/data/cache/images/img_xyz.jpg", ...],  # 1-10 local paths
+  caption="<the variation Jonathan picked>",     # required
+  title="<optional short headline>",             # TikTok carousels only
+  hashtags=["tag1", "tag2", ...],                # NO leading #
+  auto_publish=True,                             # always true for this flow
 )
 ```
 
-Returns `{ post_id, dropbox_root_path, uploaded_paths, publish_outcome: { kind, zernio_post_id } }`. If `publish_outcome.kind == "ok"`, it shipped. Other kinds (`zernio_failed`, `media_resolution_failed`, etc.) mean the publish failed — surface that to Jonathan.
+**For media that's already at a public HTTPS URL** (Dropbox temp link, a URL Jonathan pasted): use `publisher_quick_post` with `media_urls=[...]` instead. Same shape otherwise.
 
-## How to get Telegram file URLs
+Both return `{ post_id, dropbox_root_path, uploaded_paths, publish_outcome: { kind, zernio_post_id } }`. If `publish_outcome.kind == "ok"`, it shipped. Other kinds (`zernio_failed`, `media_resolution_failed`, etc.) mean publish failed — surface that to Jonathan.
 
-Each attached photo/video in Telegram comes with a `file_id`. Convert to URL:
-1. Call Telegram's `getFile` API: `GET https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getFile?file_id=<file_id>` (use the terminal tool with curl)
-2. Parse the `result.file_path` from the response
-3. URL: `https://api.telegram.org/file/bot<TELEGRAM_BOT_TOKEN>/<file_path>` — fetchable for ~1 hour, plenty of time for the publisher to download
+## Finding the cached file paths
 
-`TELEGRAM_BOT_TOKEN` is in your environment. If you don't see it, ask Jonathan, but it should be there.
+Hermes's Telegram adapter writes incoming photo/video attachments to `/opt/data/cache/images/img_<hash>.<ext>`. When Jonathan DMs you a photo, the file appears there immediately. Use the terminal tool to find the most recent ones:
+
+```
+ls -tr /opt/data/cache/images/ | tail -N
+```
+
+(where `N` = number of attachments he just sent). Pass full paths (prepend `/opt/data/cache/images/`) to `publisher_quick_post_file`. You don't need `file_id`, Telegram's getFile API, or a public URL — the multipart upload handles everything.
 
 ## Variation guidance
 

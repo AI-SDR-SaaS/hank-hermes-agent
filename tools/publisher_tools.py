@@ -40,6 +40,7 @@ The publisher signs requests with HMAC-SHA256 over the body using
 ``PUBLISHER_WEBHOOK_HMAC_SECRET``, sent in the ``X-Webhook-Signature`` header.
 """
 
+import json
 import logging
 import os
 from typing import Any
@@ -444,6 +445,161 @@ def _quick_post(args: dict, **_kw: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# publisher_quick_post_file — multipart upload variant for Telegram-cached
+# photos that don't have a public URL
+# ---------------------------------------------------------------------------
+
+QUICK_POST_FILE_SCHEMA = {
+    "name": "publisher_quick_post_file",
+    "description": (
+        "Same as publisher_quick_post but for local file paths instead of "
+        "URLs. Use this when Jonathan sends photos via Telegram — the adapter "
+        "caches them at /opt/data/cache/images/img_<hash>.jpg without "
+        "exposing a public URL. This tool reads each path and ships the bytes "
+        "directly to the publisher via multipart upload.\n\n"
+        "Workflow: after Jonathan picks one of your 3 caption variations, "
+        "find the cached file path(s) for the photos he attached and pass "
+        "them in media_file_paths. The publisher uploads to Dropbox, writes "
+        "caption.md, and (with auto_publish=true) ships to IG + TikTok in "
+        "~30s. Same defaults and validation rules as publisher_quick_post."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "angle": {
+                "type": "string",
+                "description": "Short slug for the post angle (e.g., 'emergency-storm-promo'). Hyphens OK, no underscores.",
+            },
+            "media_file_paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "1-10 absolute paths to local files on the Hermes container (typically /opt/data/cache/images/img_<hash>.<ext>). Order matters for carousels.",
+                "minItems": 1,
+                "maxItems": 10,
+            },
+            "caption": {
+                "type": "string",
+                "description": "The caption Jonathan approved (typically the variation he picked from your 3 drafts). Must contain non-whitespace content.",
+            },
+            "title": {
+                "type": "string",
+                "description": "Optional short headline. Only displayed by TikTok on carousel posts.",
+            },
+            "hashtags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Hashtags WITHOUT leading '#'. The publisher prepends '#' server-side.",
+            },
+            "brand": {
+                "type": "string",
+                "description": "Brand segment of the ad-hoc folder name. Default 'hankai'.",
+                "default": "hankai",
+            },
+            "cta": {
+                "type": "string",
+                "description": "CTA segment of the ad-hoc folder name. Default 'book-demo'.",
+                "default": "book-demo",
+            },
+            "auto_publish": {
+                "type": "boolean",
+                "description": "When true, publisher skips its Telegram approval DM and ships immediately. Use true for the ad-hoc chat flow.",
+                "default": False,
+            },
+        },
+        "required": ["angle", "media_file_paths", "caption"],
+    },
+}
+
+
+_MIME_BY_EXT = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+}
+
+# Directories the agent is allowed to read media from. The Telegram adapter
+# caches incoming attachments under /opt/data/cache/, and that's the only
+# place Hermes legitimately produces uploadable media. Restricting reads
+# to these prefixes blocks the agent from being tricked (prompt injection)
+# or buggily instructed into uploading SOUL.md, .env, /etc/passwd, etc. —
+# once uploaded with auto_publish=true, content goes straight to social.
+_ALLOWED_MEDIA_ROOTS = ("/opt/data/cache/",)
+
+
+def _quick_post_file(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.QuickPostFileRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+
+    # Read each file. Surface a clean error for missing paths rather
+    # than letting OSError bubble up — agents iterate better on tool
+    # errors than tracebacks.
+    files: list[tuple[str, tuple[str, bytes, str]]] = []
+    for p in req.media_file_paths:
+        # Realpath collapses symlinks and ".." segments so an attacker
+        # can't slip /opt/data/cache/../SOUL.md past the prefix check.
+        real_p = os.path.realpath(p)
+        if not any(real_p.startswith(root) for root in _ALLOWED_MEDIA_ROOTS):
+            return tool_error(
+                f"path outside allowed media directory: {p}",
+                hint=(
+                    "Only files under "
+                    + ", ".join(_ALLOWED_MEDIA_ROOTS)
+                    + " may be uploaded. Telegram-cached photos live in "
+                    "/opt/data/cache/images/."
+                ),
+                allowed_roots=list(_ALLOWED_MEDIA_ROOTS),
+            )
+        if not os.path.isfile(real_p):
+            return tool_error(
+                f"file not found: {p}",
+                hint="Telegram-cached photos live under /opt/data/cache/images/",
+            )
+        try:
+            with open(real_p, "rb") as f:
+                content = f.read()
+        except OSError as e:
+            return tool_error(f"could not read {p}: {e}")
+        ext = os.path.splitext(real_p)[1].lower()
+        mime = _MIME_BY_EXT.get(ext, "application/octet-stream")
+        filename = os.path.basename(real_p)
+        files.append(("media", (filename, content, mime)))
+
+    # Form fields are always strings on the multipart side; the
+    # publisher's handler JSON-parses hashtags and string-compares
+    # auto_publish.
+    data: dict[str, str] = {
+        "angle": req.angle,
+        "caption": req.caption,
+        "brand": req.brand,
+        "cta": req.cta,
+        "hashtags": json.dumps(req.hashtags),
+        "auto_publish": "true" if req.auto_publish else "false",
+    }
+    if req.title is not None:
+        data["title"] = req.title
+
+    try:
+        body = publisher_client.request_multipart(
+            "/api/ad-hoc/quick-post-file", files=files, data=data
+        )
+    except publisher_client.PublisherClientError as e:
+        return _client_error(e)
+
+    try:
+        resp = t.QuickPostResponse.model_validate(body)
+    except ValidationError as e:
+        return tool_error(
+            f"invalid response from publisher: {e.errors()}", body=body
+        )
+    return tool_result(resp.model_dump())
+
+
+# ---------------------------------------------------------------------------
 # telegram_dm_owner — thin wrapper over send_message_tool
 # ---------------------------------------------------------------------------
 
@@ -556,6 +712,15 @@ registry.register(
     toolset=PUBLISHER_TOOLSET,
     schema=QUICK_POST_SCHEMA,
     handler=lambda args, **kw: _quick_post(args, **kw),
+    check_fn=publisher_client.check_publisher_requirements,
+    requires_env=_REQUIRES_ENV,
+)
+
+registry.register(
+    name="publisher_quick_post_file",
+    toolset=PUBLISHER_TOOLSET,
+    schema=QUICK_POST_FILE_SCHEMA,
+    handler=lambda args, **kw: _quick_post_file(args, **kw),
     check_fn=publisher_client.check_publisher_requirements,
     requires_env=_REQUIRES_ENV,
 )
