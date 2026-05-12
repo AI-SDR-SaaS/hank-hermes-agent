@@ -15,7 +15,7 @@ You watch the marketing site's PostHog data, surface findings to Jonathan in Tel
 ## The closed loop
 
 ```
-cron / question  →  PostHog MCP  →  digest in Telegram
+cron / question  →  PostHog tools  →  digest in Telegram
                                           ↓
                                  Jonathan discusses
                                           ↓
@@ -40,8 +40,8 @@ cron / question  →  PostHog MCP  →  digest in Telegram
 
 These come from Railway env vars — already injected into the process:
 
-- `POSTHOG_PERSONAL_API_KEY` — read-only PostHog scopes
-- `POSTHOG_PROJECT_ID` — numeric, pinned in MCP context
+- `POSTHOG_PERSONAL_API_KEY` — read-only PostHog scopes. Native tools read it directly; nothing to wire up in config.yaml.
+- `POSTHOG_PROJECT_ID` — numeric, used as the project scope on every API call
 - `WEBSITE_GITHUB_TOKEN` — fine-grained PAT, scoped to the website repo only. Kept separate from `GITHUB_TOKEN` (which is for the skills hub) so neither over-permissions the other. Pass it to every `gh` and `git` call in this skill — see Phase 4.
 - `WEBSITE_REPO_URL` — the marketing-site repo to edit (e.g. `https://github.com/AI-SDR-SaaS/ai-assistant-website`)
 - `TELEGRAM_HOME_CHANNEL` — where scheduled digests land
@@ -51,15 +51,25 @@ If any are missing, say so plainly in chat instead of guessing.
 
 ## Phase 1 — Investigate
 
-Use the PostHog MCP tools registered under the `posthog` server. Common patterns:
+Use the native PostHog tools (gated on `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID`):
 
-- **Funnel digest:** run a HogQL query against `events` for the funnel steps Jonathan defined (signup, demo request, checkout, etc.), compare yesterday/last-week to the prior period, surface the steps where conversion moved.
-- **Recordings sanity check:** list recent session recordings filtered for `rage_click`, `dead_click`, or sessions that landed on a page and bounced. Pick 1–3 representative ones, summarize what the user did, link the URL.
-- **Errors:** check the error tracking endpoint for new or spiking error groups in the last 24h / 7d. Group by URL and message; surface the top offenders with frequency + first-seen.
-- **Flags:** when relevant, list feature flag rollout status — useful when a metric moves at the same time as a flag change.
-- **Core Web Vitals (weekly):** HogQL against `$web_vitals` events; surface p75 LCP / INP / CLS per top URL, flag regressions vs. the prior 7d.
+| Tool | Use for |
+|---|---|
+| `posthog_query` | Any HogQL query — funnel digests, Web Vitals, conversion analysis, custom aggregations. The workhorse. |
+| `posthog_list_recordings` | Recent session recordings, ordered by `console_error_count` / `click_count` / `start_time` for spotting rage/error sessions. |
+| `posthog_list_errors` | Active error-tracking issues, sorted by recent activity. |
+| `posthog_list_feature_flags` | Flag state + rollout %, for correlating metric shifts with flag changes. |
+| `posthog_get_dashboard` | Read a curated dashboard's tiles when Jonathan already built the view. |
 
-**Rate-limit awareness:** PostHog allows ~2400 HogQL queries/hour/team. A scheduled digest is fine; do not loop. If Jonathan asks an exploratory question, batch HogQL calls and avoid re-running the same query.
+Common patterns:
+
+- **Funnel digest:** `posthog_query` against `events` for the funnel steps Jonathan defined (signup, demo request, checkout, etc.), compare yesterday/last-week to the prior period, surface the steps where conversion moved.
+- **Recordings sanity check:** `posthog_list_recordings` with `order: "console_error_count"` or `"click_count"` (desc) to find rage/error-heavy sessions. Pick 1–3 representative ones, summarize what the user did, link the URL.
+- **Errors:** `posthog_list_errors` for the daily digest; drill into a specific issue with `posthog_query` against `events WHERE event = '$exception'` filtered by URL or message.
+- **Flags:** `posthog_list_feature_flags` when a metric moves — useful when a rollout changed in the same window.
+- **Core Web Vitals (weekly):** `posthog_query` against `$web_vitals` events; surface p75 LCP / INP / CLS per top URL, flag regressions vs. the prior 7d.
+
+**Rate-limit awareness:** PostHog allows ~2400 HogQL queries/hour/team. A scheduled digest is fine; do not loop. If Jonathan asks an exploratory question, batch the query into one `posthog_query` call instead of looping per-page or per-day.
 
 ## Phase 2 — Digest in Telegram
 
@@ -170,6 +180,6 @@ If Cubic flagged **blocking** issues: don't hide them — surface them and ask b
 
 ## Common questions you'll get and how to answer
 
-- **"What happened to conversions yesterday?"** → PostHog MCP funnel query, day-over-day comparison, find the step that moved, look at recordings/errors near the regression hour. Reply in Telegram with the breakdown + a hypothesis. Do not start editing the site.
-- **"Why is /pricing slow?"** → Web Vitals HogQL filtered to `/pricing`, top-N by p75 LCP, then check recent errors and recordings on that URL.
+- **"What happened to conversions yesterday?"** → `posthog_query` funnel query, day-over-day comparison, find the step that moved, then `posthog_list_recordings` + `posthog_list_errors` near the regression hour. Reply in Telegram with the breakdown + a hypothesis. Do not start editing the site.
+- **"Why is /pricing slow?"** → `posthog_query` against `$web_vitals` filtered to `/pricing`, top-N by p75 LCP, then check recent errors and recordings on that URL.
 - **"Did the hero copy change help?"** → compare funnel/CTR for the window since the merge against the same length of time before.
