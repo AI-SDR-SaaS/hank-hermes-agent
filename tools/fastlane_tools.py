@@ -196,3 +196,64 @@ registry.register(
     check_fn=fastlane_client.check_fastlane_requirements,
     requires_env=_REQUIRES_ENV,
 )
+
+
+# ---------------------------------------------------------------------------
+# fastlane_mark_posted
+# ---------------------------------------------------------------------------
+
+MARK_POSTED_SCHEMA = {
+    "name": "fastlane_mark_posted",
+    "description": (
+        "Record that a Fastlane content_id has been shipped. Adds to the "
+        "dedup map (so fastlane_list_unposted never returns it again) and, "
+        "if today's plan has a slot with that content_id, flips that slot's "
+        "status to 'posted'. Idempotent."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "content_id": {"type": "string"},
+            "platforms": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Platforms posted to. Default ['instagram', 'tiktok'].",
+            },
+        },
+        "required": ["content_id"],
+    },
+}
+
+
+def _mark_posted(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.MarkPostedRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    record = fastlane_state.mark_posted(req.content_id, platforms=req.platforms)
+    # Best-effort: find a slot in today's plan that matches and flip its status.
+    flipped_slot: str | None = None
+    plan = fastlane_state._read_json(fastlane_state._plan_path())
+    if isinstance(plan, dict):
+        for slot_name in ("a", "b"):
+            slot = plan.get(f"slot_{slot_name}")
+            if slot and slot.get("content_id") == req.content_id:
+                fastlane_state.mark_slot_posted(plan.get("date", ""), slot_name)
+                flipped_slot = slot_name
+                break
+    return tool_result({
+        "ok": True,
+        "content_id": req.content_id,
+        "record": record,
+        "flipped_slot": flipped_slot,
+    })
+
+
+registry.register(
+    name="fastlane_mark_posted",
+    toolset=FASTLANE_TOOLSET,
+    schema=MARK_POSTED_SCHEMA,
+    handler=lambda args, **kw: _mark_posted(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)

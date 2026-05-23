@@ -112,3 +112,31 @@ def test_get_daily_plan_missing_returns_pending():
     assert payload["ok"] is True
     assert payload["status"] == "pending"
     assert payload["slot"] is None
+
+
+from tools.fastlane_tools import _mark_posted
+
+
+def test_mark_posted_updates_both_files():
+    fastlane_state.save_slot(
+        "2026-05-23", "a",
+        content_id="abc", media_url="https://cdn/abc.mp4", chosen_caption="cap",
+    )
+    payload = json.loads(_mark_posted({
+        "content_id": "abc",
+        "platforms": ["instagram", "tiktok"],
+    }))
+    assert payload["ok"] is True
+    assert fastlane_state.has_posted("abc") is True
+    # Slot status is also flipped (we find the slot by content_id).
+    slot = fastlane_state.get_slot("2026-05-23", "a")
+    assert slot["status"] == "posted"
+
+
+def test_mark_posted_without_matching_slot_still_dedups():
+    payload = json.loads(_mark_posted({
+        "content_id": "no-slot-match",
+        "platforms": ["instagram"],
+    }))
+    assert payload["ok"] is True
+    assert fastlane_state.has_posted("no-slot-match") is True
