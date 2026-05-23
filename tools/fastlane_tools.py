@@ -97,3 +97,54 @@ registry.register(
     check_fn=fastlane_client.check_fastlane_requirements,
     requires_env=_REQUIRES_ENV,
 )
+
+
+# ---------------------------------------------------------------------------
+# fastlane_save_daily_plan
+# ---------------------------------------------------------------------------
+
+SAVE_DAILY_PLAN_SCHEMA = {
+    "name": "fastlane_save_daily_plan",
+    "description": (
+        "Persist Jonathan's caption choice for one of today's two post "
+        "slots. Call this AFTER he taps a caption variant in Telegram. "
+        "The slot is marked status='chosen'; the publish cron will read "
+        "it later and ship via publisher_quick_post(auto_publish=true)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "ET date YYYY-MM-DD."},
+            "slot": {"type": "string", "enum": ["a", "b"]},
+            "content_id": {"type": "string", "description": "Fastlane _id."},
+            "media_url": {"type": "string", "description": "Public CDN URL from Fastlane.files[0]."},
+            "chosen_caption": {"type": "string", "description": "Full ## Caption + ## Hashtags markdown."},
+        },
+        "required": ["date", "slot", "content_id", "media_url", "chosen_caption"],
+    },
+}
+
+
+def _save_daily_plan(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.SaveDailyPlanRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    slot = fastlane_state.save_slot(
+        req.date,
+        req.slot,
+        content_id=req.content_id,
+        media_url=req.media_url,
+        chosen_caption=req.chosen_caption,
+    )
+    return tool_result({"ok": True, "date": req.date, "slot": req.slot, "record": slot})
+
+
+registry.register(
+    name="fastlane_save_daily_plan",
+    toolset=FASTLANE_TOOLSET,
+    schema=SAVE_DAILY_PLAN_SCHEMA,
+    handler=lambda args, **kw: _save_daily_plan(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)

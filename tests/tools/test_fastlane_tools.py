@@ -63,3 +63,31 @@ def test_list_unposted_returns_oldest_first(monkeypatch):
 def test_list_unposted_validates_limit():
     payload = json.loads(_list_unposted({"limit": 0}))
     assert payload["ok"] is False
+
+
+from tools.fastlane_tools import _save_daily_plan
+
+
+def test_save_daily_plan_persists():
+    payload = json.loads(_save_daily_plan({
+        "date": "2026-05-23",
+        "slot": "a",
+        "content_id": "abc",
+        "media_url": "https://cdn/abc.mp4",
+        "chosen_caption": "post caption text",
+    }))
+    assert payload["ok"] is True
+    slot = fastlane_state.get_slot("2026-05-23", "a")
+    assert slot["chosen_caption"] == "post caption text"
+    assert slot["status"] == "chosen"
+
+
+def test_save_daily_plan_rejects_bad_slot():
+    payload = json.loads(_save_daily_plan({
+        "date": "2026-05-23",
+        "slot": "c",
+        "content_id": "x",
+        "media_url": "https://cdn/x.mp4",
+        "chosen_caption": "hello",
+    }))
+    assert payload["ok"] is False
