@@ -75,6 +75,7 @@ CONFIGURABLE_TOOLSETS = [
     ("publisher",       "📤 Publisher",                  "caption gen, post queue/publish, ad-hoc ingest, owner DM (gated on PUBLISHER_BASE_URL + PUBLISHER_API_KEY)"),
     ("airtable",        "📊 Content Log",                "log posts to Airtable when configured, JSONL fallback otherwise"),
     ("posthog",         "📈 PostHog",                    "HogQL queries, session recordings, errors, feature flags, dashboards (gated on POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID)"),
+    ("fastlane",        "🎬 Fastlane",                   "List unposted videos from usefastlane.ai + daily-plan slot helpers (gated on FASTLANE_API_KEY)"),
 ]
 
 # Toolsets that are OFF by default for new installs.

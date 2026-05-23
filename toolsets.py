@@ -240,6 +240,17 @@ TOOLSETS = {
         "includes": [],
     },
 
+    "fastlane": {
+        "description": "Fastlane content tools — list unposted videos from usefastlane.ai, manage today's plan, mark posted. Gated on FASTLANE_API_KEY.",
+        "tools": [
+            "fastlane_list_unposted",
+            "fastlane_save_daily_plan",
+            "fastlane_get_daily_plan",
+            "fastlane_mark_posted",
+        ],
+        "includes": [],
+    },
+
     "airtable": {
         "description": "Content log writer — Airtable when AIRTABLE_* env vars set, JSONL fallback otherwise.",
         "tools": ["airtable_log_post"],
@@ -357,9 +368,9 @@ TOOLSETS = {
     },
     
     "hermes-cli": {
-        "description": "Full interactive CLI toolset - all default tools plus cronjob management, publisher, airtable, posthog",
+        "description": "Full interactive CLI toolset - all default tools plus cronjob management, publisher, airtable, posthog, fastlane",
         "tools": _HERMES_CORE_TOOLS,
-        "includes": ["publisher", "airtable", "posthog"]
+        "includes": ["publisher", "airtable", "posthog", "fastlane"]
     },
 
     "hermes-cron": {
@@ -380,12 +391,12 @@ TOOLSETS = {
     },
     
     "hermes-discord": {
-        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval), publisher + airtable + posthog for content + monitoring workflow",
+        "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval), publisher + airtable + posthog + fastlane for content + monitoring workflow",
         "tools": _HERMES_CORE_TOOLS + [
             "discord",
             "discord_admin",
         ],
-        "includes": ["publisher", "airtable", "posthog"]
+        "includes": ["publisher", "airtable", "posthog", "fastlane"]
     },
     
     "hermes-whatsapp": {

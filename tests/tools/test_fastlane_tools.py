@@ -140,3 +140,30 @@ def test_mark_posted_without_matching_slot_still_dedups():
     }))
     assert payload["ok"] is True
     assert fastlane_state.has_posted("no-slot-match") is True
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "fastlane_list_unposted",
+        "fastlane_save_daily_plan",
+        "fastlane_get_daily_plan",
+        "fastlane_mark_posted",
+    ],
+)
+def test_tool_registered_under_fastlane_toolset(name):
+    entry = registry.get_entry(name)
+    assert entry is not None, f"{name} is not registered"
+    assert entry.toolset == FASTLANE_TOOLSET
+    assert entry.schema.get("name") == name
+    assert entry.schema.get("parameters", {}).get("type") == "object"
+
+
+def test_check_fastlane_requirements_fails_closed(monkeypatch):
+    monkeypatch.delenv("FASTLANE_API_KEY", raising=False)
+    assert fastlane_client.check_fastlane_requirements() is False
+
+
+def test_check_fastlane_requirements_true_when_set(monkeypatch):
+    monkeypatch.setenv("FASTLANE_API_KEY", "fsln_live_test")
+    assert fastlane_client.check_fastlane_requirements() is True
