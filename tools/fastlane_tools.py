@@ -148,3 +148,51 @@ registry.register(
     check_fn=fastlane_client.check_fastlane_requirements,
     requires_env=_REQUIRES_ENV,
 )
+
+
+# ---------------------------------------------------------------------------
+# fastlane_get_daily_plan
+# ---------------------------------------------------------------------------
+
+GET_DAILY_PLAN_SCHEMA = {
+    "name": "fastlane_get_daily_plan",
+    "description": (
+        "Read one slot from today's plan. Used by the publish-cron "
+        "prompt: if status=='chosen' it ships via publisher_quick_post; "
+        "if status=='pending' or no plan exists, the cron silently skips."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string"},
+            "slot": {"type": "string", "enum": ["a", "b"]},
+        },
+        "required": ["date", "slot"],
+    },
+}
+
+
+def _get_daily_plan(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.GetDailyPlanRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    rec = fastlane_state.get_slot(req.date, req.slot)
+    status = rec["status"] if rec else "pending"
+    return tool_result({
+        "ok": True,
+        "date": req.date,
+        "slot_name": req.slot,
+        "status": status,
+        "slot": rec,
+    })
+
+
+registry.register(
+    name="fastlane_get_daily_plan",
+    toolset=FASTLANE_TOOLSET,
+    schema=GET_DAILY_PLAN_SCHEMA,
+    handler=lambda args, **kw: _get_daily_plan(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)

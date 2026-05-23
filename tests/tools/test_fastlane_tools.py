@@ -91,3 +91,24 @@ def test_save_daily_plan_rejects_bad_slot():
         "chosen_caption": "hello",
     }))
     assert payload["ok"] is False
+
+
+from tools.fastlane_tools import _get_daily_plan
+
+
+def test_get_daily_plan_returns_slot():
+    fastlane_state.save_slot(
+        "2026-05-23", "b",
+        content_id="zzz", media_url="https://cdn/zzz.mp4", chosen_caption="cap",
+    )
+    payload = json.loads(_get_daily_plan({"date": "2026-05-23", "slot": "b"}))
+    assert payload["ok"] is True
+    assert payload["status"] == "chosen"
+    assert payload["slot"]["content_id"] == "zzz"
+
+
+def test_get_daily_plan_missing_returns_pending():
+    payload = json.loads(_get_daily_plan({"date": "2026-05-23", "slot": "a"}))
+    assert payload["ok"] is True
+    assert payload["status"] == "pending"
+    assert payload["slot"] is None
