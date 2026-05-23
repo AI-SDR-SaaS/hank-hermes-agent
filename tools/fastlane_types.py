@@ -28,8 +28,10 @@ class FastlaneContent(BaseModel):
 
 
 class FastlanePagination(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
     cursor: Optional[str] = None
-    hasMore: bool = False
+    has_more: bool = Field(default=False, alias="hasMore")
 
 
 class FastlaneListResponse(BaseModel):
