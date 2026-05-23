@@ -86,3 +86,80 @@ def mark_posted(content_id: str, *, platforms: list[str]) -> dict:
     }
     _atomic_write_json(_posted_path(), data)
     return data[content_id]
+
+
+# ---------------------------------------------------------------------------
+# daily_plan.json — today's two slots
+# ---------------------------------------------------------------------------
+
+
+def _load_plan() -> Optional[dict]:
+    data = _read_json(_plan_path())
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def get_slot(date: str, slot: str) -> Optional[dict]:
+    """Return today's slot record or None.
+
+    Returns None if the plan file doesn't exist, is for a different date,
+    or the requested slot is missing.
+    """
+    plan = _load_plan()
+    if not plan or plan.get("date") != date:
+        return None
+    return plan.get(f"slot_{slot}")
+
+
+def save_slot(
+    date: str,
+    slot: str,
+    *,
+    content_id: str,
+    media_url: str,
+    chosen_caption: str,
+) -> dict:
+    """Upsert a slot. If the on-disk plan is for a different date, the file
+    is REPLACED (single-day window). Status is set to ``"chosen"``.
+    """
+    plan = _load_plan()
+    if not plan or plan.get("date") != date:
+        plan = {"date": date, "slot_a": None, "slot_b": None}
+    plan[f"slot_{slot}"] = {
+        "content_id": content_id,
+        "media_url": media_url,
+        "chosen_caption": chosen_caption,
+        "status": "chosen",
+        "posted_at": None,
+    }
+    _atomic_write_json(_plan_path(), plan)
+    return plan[f"slot_{slot}"]
+
+
+def mark_slot_posted(date: str, slot: str) -> Optional[dict]:
+    """Mark a chosen slot as ``"posted"``. No-op if slot missing / date mismatched."""
+    plan = _load_plan()
+    if not plan or plan.get("date") != date:
+        return None
+    rec = plan.get(f"slot_{slot}")
+    if not rec:
+        return None
+    rec["status"] = "posted"
+    rec["posted_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _atomic_write_json(_plan_path(), plan)
+    return rec
+
+
+def mark_slot_failed(date: str, slot: str, error: str) -> Optional[dict]:
+    """Mark a chosen slot as ``"failed"`` (e.g. publisher 400 after retry)."""
+    plan = _load_plan()
+    if not plan or plan.get("date") != date:
+        return None
+    rec = plan.get(f"slot_{slot}")
+    if not rec:
+        return None
+    rec["status"] = "failed"
+    rec["error"] = error
+    _atomic_write_json(_plan_path(), plan)
+    return rec
