@@ -62,7 +62,7 @@ def test_list_unposted_returns_oldest_first(monkeypatch):
 
 def test_list_unposted_validates_limit():
     payload = json.loads(_list_unposted({"limit": 0}))
-    assert payload["ok"] is False
+    assert "error" in payload
 
 
 from tools.fastlane_tools import _save_daily_plan
@@ -90,7 +90,7 @@ def test_save_daily_plan_rejects_bad_slot():
         "media_url": "https://cdn/x.mp4",
         "chosen_caption": "hello",
     }))
-    assert payload["ok"] is False
+    assert "error" in payload
 
 
 from tools.fastlane_tools import _get_daily_plan

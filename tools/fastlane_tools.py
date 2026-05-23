@@ -21,7 +21,7 @@ _REQUIRES_ENV = ["FASTLANE_API_KEY"]
 
 
 def _validation_error(e: ValidationError) -> str:
-    return tool_error("invalid arguments", ok=False, details=e.errors())
+    return tool_error("invalid arguments", details=e.errors())
 
 
 def _client_error(e: fastlane_client.FastlaneClientError) -> str:

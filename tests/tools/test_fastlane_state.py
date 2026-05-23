@@ -86,3 +86,16 @@ def test_mark_slot_posted(state_dir):
 def test_mark_slot_posted_missing_is_no_op(state_dir):
     result = fastlane_state.mark_slot_posted("2026-05-23", "b")
     assert result is None
+
+
+def test_mark_slot_failed(state_dir):
+    fastlane_state.save_slot("2026-05-23", "a", content_id="abc", media_url="u", chosen_caption="c")
+    fastlane_state.mark_slot_failed("2026-05-23", "a", error="zernio 400 after retry")
+    slot = fastlane_state.get_slot("2026-05-23", "a")
+    assert slot["status"] == "failed"
+    assert slot["error"] == "zernio 400 after retry"
+
+
+def test_mark_slot_failed_missing_is_no_op(state_dir):
+    result = fastlane_state.mark_slot_failed("2026-05-23", "b", error="nope")
+    assert result is None
