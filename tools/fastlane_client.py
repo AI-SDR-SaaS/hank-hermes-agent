@@ -132,3 +132,16 @@ def request(method: str, path: str, *, params: dict | None = None) -> dict:
         raise FastlaneClientError(503, f"fastlane unavailable: {e}") from e
     except _TRANSIENT_NETWORK_ERRORS as e:
         raise FastlaneClientError(0, f"fastlane network error: {e}") from e
+
+
+def list_content(limit: int = 20, cursor: str | None = None) -> dict:
+    """GET /content. Returns {"data": [...], "pagination": {...}}."""
+    params: dict[str, Any] = {"limit": limit}
+    if cursor:
+        params["cursor"] = cursor
+    return request("GET", "/content", params=params)
+
+
+def get_content(content_id: str) -> dict:
+    """GET /content/{id}. Returns {"data": {...}}."""
+    return request("GET", f"/content/{content_id}")
