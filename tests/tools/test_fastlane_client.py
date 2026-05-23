@@ -1,7 +1,5 @@
 """Tests for tools/fastlane_client.py."""
 
-from unittest.mock import patch
-
 import httpx
 import pytest
 

@@ -74,6 +74,7 @@ def _build_client() -> httpx.Client:
         base_url=_base_url(),
         headers={
             "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
             "Accept": "application/json",
         },
         timeout=DEFAULT_TIMEOUT,
