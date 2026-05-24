@@ -307,6 +307,7 @@ class TestBuiltinDiscovery:
             "tools.image_generation_tool",
             "tools.memory_tool",
             "tools.mixture_of_agents_tool",
+            "tools.fastlane_tools",
             "tools.posthog_tools",
             "tools.process_registry",
             "tools.publisher_tools",
