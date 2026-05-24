@@ -34,10 +34,10 @@ Three Hermes cron entries, two state files, one new Python client + toolset, one
 18:00 ET   fastlane-publish-slot-b    Same for slot B.
 ```
 
-State files (on Hermes Railway, `/opt/data/`):
+State files live under `HERMES_HOME/fastlane/` (resolves to `/opt/data/fastlane/` on Hermes Railway since `HERMES_HOME=/opt/data`):
 
-- `fastlane_daily_plan.json` — today's two slots, each with `content_id`, `media_url`, `chosen_caption`, `status`
-- `fastlane_posted.json` — append-only map of Fastlane `_id` → `{posted_at, platforms}`, dedup forever
+- `daily_plan.json` — today's two slots, each with `content_id`, `media_url`, `chosen_caption`, `status`
+- `posted.json` — append-only map of Fastlane `_id` → `{posted_at, platforms}`, dedup forever
 
 ## Fastlane API surface (verified 2026-05-23)
 

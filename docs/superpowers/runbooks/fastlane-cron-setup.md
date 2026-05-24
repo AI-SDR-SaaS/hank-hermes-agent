@@ -110,7 +110,7 @@ or cron prompts before bothering with new features.
 
 ## DST cutover
 
-EST starts on Sunday Nov 2, 2026 at 02:00 ET. On Nov 1, recreate the three
+EST starts on Sunday Nov 1, 2026 at 02:00 ET. Before that date, recreate the three
 cron entries with UTC expressions shifted +1h:
 
 | Slot | EDT cron | EST cron |

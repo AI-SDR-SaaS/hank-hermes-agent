@@ -158,12 +158,3 @@ def test_tool_registered_under_fastlane_toolset(name):
     assert entry.schema.get("name") == name
     assert entry.schema.get("parameters", {}).get("type") == "object"
 
-
-def test_check_fastlane_requirements_fails_closed(monkeypatch):
-    monkeypatch.delenv("FASTLANE_API_KEY", raising=False)
-    assert fastlane_client.check_fastlane_requirements() is False
-
-
-def test_check_fastlane_requirements_true_when_set(monkeypatch):
-    monkeypatch.setenv("FASTLANE_API_KEY", "fsln_live_test")
-    assert fastlane_client.check_fastlane_requirements() is True

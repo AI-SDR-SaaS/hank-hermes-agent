@@ -65,11 +65,11 @@ def test_save_then_get_slot(state_dir):
     assert fastlane_state.get_slot("2026-05-23", "b") is None
 
 
-def test_save_slot_wrong_date_does_not_clobber_other_date(state_dir):
+def test_save_slot_for_new_date_replaces_plan(state_dir):
     fastlane_state.save_slot("2026-05-23", "a", content_id="abc", media_url="u", chosen_caption="c")
     fastlane_state.save_slot("2026-05-24", "a", content_id="def", media_url="u2", chosen_caption="c2")
-    # Saving for a new date REPLACES the plan — slot_b under old date is gone.
-    # Only one day's plan is kept at a time.
+    # Only one day's plan is kept at a time — saving for a new date REPLACES
+    # the file, so any prior-day slots are gone.
     plan = json.loads((state_dir / "daily_plan.json").read_text())
     assert plan["date"] == "2026-05-24"
     assert plan["slot_a"]["content_id"] == "def"

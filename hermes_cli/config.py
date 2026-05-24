@@ -1678,6 +1678,21 @@ OPTIONAL_ENV_VARS = {
         "category": "tool",
     },
 
+    # ── Fastlane (usefastlane.ai) — daily IG/TikTok content cron ──
+    "FASTLANE_API_KEY": {
+        "description": "Workspace-scoped API key from app.usefastlane.ai (shape: fsln_live_*). Partner keys are NOT supported.",
+        "prompt": "Fastlane API key",
+        "url": "https://app.usefastlane.ai",
+        "tools": [
+            "fastlane_list_unposted",
+            "fastlane_save_daily_plan",
+            "fastlane_get_daily_plan",
+            "fastlane_mark_posted",
+        ],
+        "password": True,
+        "category": "tool",
+    },
+
     # ── Airtable content log (Airtable when set, JSONL fallback otherwise) ──
     "AIRTABLE_API_KEY": {
         "description": "Airtable Personal Access Token for the content log (optional — JSONL fallback runs without it)",
