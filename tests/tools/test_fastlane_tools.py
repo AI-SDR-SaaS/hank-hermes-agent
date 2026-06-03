@@ -142,6 +142,52 @@ def test_mark_posted_without_matching_slot_still_dedups():
     assert fastlane_state.has_posted("no-slot-match") is True
 
 
+from tools.fastlane_tools import _log_caption_choice, _recent_caption_history
+
+
+def test_log_caption_choice_appends_record():
+    payload = json.loads(_log_caption_choice({
+        "content_id": "p123",
+        "type": "video-hook",
+        "chosen": "## Caption\nhello\n## Hashtags\n#tag",
+        "rejected": ["variant 2", "variant 3"],
+    }))
+    assert payload["ok"] is True
+    records = fastlane_state.read_recent_caption_history(limit=5)
+    assert len(records) == 1
+    assert records[0]["content_id"] == "p123"
+    assert records[0]["rejected"] == ["variant 2", "variant 3"]
+
+
+def test_log_caption_choice_rejects_empty_chosen():
+    payload = json.loads(_log_caption_choice({
+        "content_id": "p123",
+        "type": "video-hook",
+        "chosen": "",
+        "rejected": [],
+    }))
+    assert "error" in payload
+
+
+def test_recent_caption_history_empty_returns_empty_list():
+    payload = json.loads(_recent_caption_history({"limit": 5}))
+    assert payload["ok"] is True
+    assert payload["records"] == []
+    assert payload["count"] == 0
+
+
+def test_recent_caption_history_returns_newest_first():
+    for i in range(4):
+        fastlane_state.append_caption_history(
+            content_id=f"p{i}", type_="video-hook",
+            chosen=f"cap{i}", rejected=[],
+        )
+    payload = json.loads(_recent_caption_history({"limit": 3}))
+    assert payload["ok"] is True
+    assert payload["count"] == 3
+    assert [r["content_id"] for r in payload["records"]] == ["p3", "p2", "p1"]
+
+
 @pytest.mark.parametrize(
     "name",
     [
