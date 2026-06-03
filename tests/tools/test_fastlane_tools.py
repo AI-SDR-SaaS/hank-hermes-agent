@@ -195,6 +195,8 @@ def test_recent_caption_history_returns_newest_first():
         "fastlane_save_daily_plan",
         "fastlane_get_daily_plan",
         "fastlane_mark_posted",
+        "fastlane_log_caption_choice",
+        "fastlane_recent_caption_history",
     ],
 )
 def test_tool_registered_under_fastlane_toolset(name):
