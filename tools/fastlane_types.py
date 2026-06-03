@@ -97,3 +97,22 @@ class GetDailyPlanRequest(BaseModel):
 class MarkPostedRequest(BaseModel):
     content_id: str
     platforms: list[str] = Field(default_factory=lambda: ["instagram", "tiktok"])
+
+
+class CaptionHistoryRecord(BaseModel):
+    ts: str  # ISO UTC
+    content_id: str
+    type: str
+    chosen: str
+    rejected: list[str]
+
+
+class LogCaptionChoiceRequest(BaseModel):
+    content_id: str
+    type: str
+    chosen: str = Field(min_length=1)
+    rejected: list[str] = Field(default_factory=list)
+
+
+class RecentCaptionHistoryRequest(BaseModel):
+    limit: int = Field(default=10, ge=1, le=100)
