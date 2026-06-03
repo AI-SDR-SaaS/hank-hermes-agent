@@ -99,3 +99,46 @@ def test_mark_slot_failed(state_dir):
 def test_mark_slot_failed_missing_is_no_op(state_dir):
     result = fastlane_state.mark_slot_failed("2026-05-23", "b", error="nope")
     assert result is None
+
+
+def test_append_caption_history_then_read(state_dir):
+    fastlane_state.append_caption_history(
+        content_id="p1", type_="video-hook",
+        chosen="## Caption\nA\n## Hashtags\n#x", rejected=["B", "C"],
+    )
+    fastlane_state.append_caption_history(
+        content_id="p2", type_="wall-of-text",
+        chosen="## Caption\nD\n## Hashtags\n#y", rejected=["E", "F"],
+    )
+    records = fastlane_state.read_recent_caption_history(limit=5)
+    assert len(records) == 2
+    # Newest-first
+    assert records[0]["content_id"] == "p2"
+    assert records[1]["content_id"] == "p1"
+    assert records[0]["rejected"] == ["E", "F"]
+
+
+def test_read_recent_caption_history_respects_limit(state_dir):
+    for i in range(5):
+        fastlane_state.append_caption_history(
+            content_id=f"p{i}", type_="video-hook",
+            chosen=f"cap{i}", rejected=[],
+        )
+    records = fastlane_state.read_recent_caption_history(limit=3)
+    assert len(records) == 3
+    assert [r["content_id"] for r in records] == ["p4", "p3", "p2"]
+
+
+def test_read_recent_caption_history_missing_file_returns_empty(state_dir):
+    assert fastlane_state.read_recent_caption_history(limit=10) == []
+
+
+def test_read_recent_caption_history_skips_corrupt_lines(state_dir):
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "caption_history.jsonl").write_text(
+        '{"ts":"2026-01-01T00:00:00Z","content_id":"good","type":"x","chosen":"c","rejected":[]}\n'
+        '{not json this line\n'
+        '{"ts":"2026-01-02T00:00:00Z","content_id":"also_good","type":"y","chosen":"c","rejected":[]}\n'
+    )
+    records = fastlane_state.read_recent_caption_history(limit=10)
+    assert [r["content_id"] for r in records] == ["also_good", "good"]

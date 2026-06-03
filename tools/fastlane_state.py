@@ -163,3 +163,63 @@ def mark_slot_failed(date: str, slot: str, error: str) -> Optional[dict]:
     rec["error"] = error
     _atomic_write_json(_plan_path(), plan)
     return rec
+
+
+# ---------------------------------------------------------------------------
+# caption_history.jsonl — append-only log of caption picks for in-context learning
+# ---------------------------------------------------------------------------
+
+
+def _history_path() -> Path:
+    return _state_dir() / "caption_history.jsonl"
+
+
+def append_caption_history(
+    *,
+    content_id: str,
+    type_: str,
+    chosen: str,
+    rejected: list[str],
+) -> dict:
+    """Append a record to caption_history.jsonl. Always succeeds (creates file if needed)."""
+    path = _history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "content_id": content_id,
+        "type": type_,
+        "chosen": chosen,
+        "rejected": list(rejected),
+    }
+    # Append, not atomic-rewrite — history is append-only and we tolerate
+    # a torn final line (the read path skips corrupt lines).
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return record
+
+
+def read_recent_caption_history(*, limit: int = 10) -> list[dict]:
+    """Return up to `limit` most recent caption records, newest-first.
+
+    Tolerates a missing file (returns []) and corrupt lines (skips them).
+    """
+    path = _history_path()
+    if not path.exists():
+        return []
+    records: list[dict] = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(rec, dict):
+                    records.append(rec)
+    except OSError as e:
+        logger.warning("caption_history.jsonl unreadable: %s", e)
+        return []
+    return list(reversed(records))[:limit]
