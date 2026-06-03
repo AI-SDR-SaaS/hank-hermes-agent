@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -201,12 +202,14 @@ def append_caption_history(
 def read_recent_caption_history(*, limit: int = 10) -> list[dict]:
     """Return up to `limit` most recent caption records, newest-first.
 
-    Tolerates a missing file (returns []) and corrupt lines (skips them).
+    Memory is bounded to `limit` records via a ring buffer — works even if
+    the on-disk JSONL grows large over time. Tolerates missing file (returns
+    []) and corrupt lines (skips them).
     """
     path = _history_path()
     if not path.exists():
         return []
-    records: list[dict] = []
+    buf: deque[dict] = deque(maxlen=limit)
     try:
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
@@ -218,8 +221,8 @@ def read_recent_caption_history(*, limit: int = 10) -> list[dict]:
                 except ValueError:
                     continue
                 if isinstance(rec, dict):
-                    records.append(rec)
+                    buf.append(rec)
     except OSError as e:
         logger.warning("caption_history.jsonl unreadable: %s", e)
         return []
-    return list(reversed(records))[:limit]
+    return list(reversed(buf))
