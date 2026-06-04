@@ -27,11 +27,22 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
    No visual curation — just take them in order. If only 1 item is available,
    plan slot A only and tell Jonathan slot B will skip today.
 
-3. **Draft 3 caption variants per pick.** For each post:
-   - Captions follow Hank's voice from `skills/social-media/ad-hoc-post/SKILL.md`,
-     refined by the recent-history examples from step 0.
-   - The `type` field (`wall-of-text`, `green-screen`, `video-hook`, `slideshow`,
-     `remix`) is your only context for what's in the video — use it to shape tone.
+3. **Read the on-screen text from each thumbnail, then draft 3 caption variants per pick.**
+   Every Fastlane video has its script burned in as a text overlay. The `thumbnail_url`
+   in each item is a still frame that captures that text — open the image and read
+   it. The text IS the video's script and the SOLE source of truth for what the
+   clip is about. The `type` field is just a layout hint (`wall-of-text`,
+   `green-screen`, `video-hook`, `slideshow`, `remix`); it doesn't tell you the
+   topic.
+
+   For each post:
+   - Vision-read the `thumbnail_url` and transcribe the on-screen text mentally —
+     that's the video's actual script.
+   - Captions should COMPLEMENT what's on screen, not restate it. The viewer will
+     watch the clip; your caption is the hook above/below that adds context,
+     curiosity, or a CTA.
+   - Voice follows `skills/social-media/ad-hoc-post/SKILL.md`, refined by the
+     recent-history examples from step 0.
    - Format each variant as the markdown the publisher expects:
      ```
      ## Caption
