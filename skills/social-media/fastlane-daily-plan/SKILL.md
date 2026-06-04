@@ -13,6 +13,11 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
 
 ## Workflow
 
+0. **Load recent picks for tone context.** Call `fastlane_recent_caption_history({"limit": 10})`.
+   Use the returned `records` (each has `chosen` + `rejected`) as concrete examples
+   of Jonathan's taste when drafting today's variants. Match the patterns you see —
+   tone, hashtag density, length, what he picks vs what he rejects.
+
 1. **Pull candidates.** Call `fastlane_list_unposted({"limit": 20})`.
    - If `items` is empty → reply with the single token `[SILENT]` and stop.
      The publish slots will silently skip too. No Telegram noise.
@@ -23,7 +28,8 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
    plan slot A only and tell Jonathan slot B will skip today.
 
 3. **Draft 3 caption variants per pick.** For each post:
-   - Captions follow Hank's voice from `skills/social-media/ad-hoc-post/SKILL.md`.
+   - Captions follow Hank's voice from `skills/social-media/ad-hoc-post/SKILL.md`,
+     refined by the recent-history examples from step 0.
    - The `type` field (`wall-of-text`, `green-screen`, `video-hook`, `slideshow`,
      `remix`) is your only context for what's in the video — use it to shape tone.
    - Format each variant as the markdown the publisher expects:
@@ -37,12 +43,16 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
    - No `# Title` (TikTok carousel only; these are videos).
 
 4. **Send Telegram pickers.** Two messages, one per post:
-   - Message body: a 1-line summary per variant.
+   - **First line of message body must be the `media_url` (.mp4) on its own line** so
+     Telegram auto-embeds the video preview — Jonathan needs to see which clip
+     each picker is for.
+   - Below the URL: a 1-line summary per variant.
    - Inline keyboard: three buttons, payload encodes `slot` + `variant_index`
      so the bot adapter can route the tap back to a handler that calls
-     `fastlane_save_daily_plan(...)` with the chosen caption.
+     `fastlane_save_daily_plan(...)` AND `fastlane_log_caption_choice(...)`
+     with the chosen caption.
 
-5. **On each tap, persist.** Call:
+5. **On each tap, persist both state files.** Call:
    ```
    fastlane_save_daily_plan({
      "date": "<YYYY-MM-DD in ET>",
@@ -50,6 +60,12 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
      "content_id": "<from step 2>",
      "media_url": "<from step 1 items[i].media_url>",
      "chosen_caption": "<the full ## Caption + ## Hashtags markdown>"
+   })
+   fastlane_log_caption_choice({
+     "content_id": "<from step 2>",
+     "type": "<from step 1 items[i].type>",
+     "chosen": "<the full caption markdown he picked>",
+     "rejected": ["<other variant 1>", "<other variant 2>"]
    })
    ```
 

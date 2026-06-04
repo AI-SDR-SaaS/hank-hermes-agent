@@ -257,3 +257,102 @@ registry.register(
     check_fn=fastlane_client.check_fastlane_requirements,
     requires_env=_REQUIRES_ENV,
 )
+
+
+# ---------------------------------------------------------------------------
+# fastlane_log_caption_choice
+# ---------------------------------------------------------------------------
+
+LOG_CAPTION_CHOICE_SCHEMA = {
+    "name": "fastlane_log_caption_choice",
+    "description": (
+        "Record Jonathan's caption pick (and the 2 rejected variants) for "
+        "in-context learning on future runs. Call this in addition to "
+        "fastlane_save_daily_plan whenever he taps a caption variant in "
+        "Telegram. Append-only; never overwrites prior entries."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "content_id": {"type": "string", "description": "Fastlane _id."},
+            "type": {"type": "string", "description": "Fastlane content type (wall-of-text, green-screen, video-hook, slideshow, remix)."},
+            "chosen": {"type": "string", "description": "The full caption markdown Jonathan picked."},
+            "rejected": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "The 2 caption variants he did NOT pick.",
+            },
+        },
+        "required": ["content_id", "type", "chosen"],
+    },
+}
+
+
+def _log_caption_choice(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.LogCaptionChoiceRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    record = fastlane_state.append_caption_history(
+        content_id=req.content_id,
+        type_=req.type,
+        chosen=req.chosen,
+        rejected=req.rejected,
+    )
+    return tool_result({"ok": True, "record": record})
+
+
+registry.register(
+    name="fastlane_log_caption_choice",
+    toolset=FASTLANE_TOOLSET,
+    schema=LOG_CAPTION_CHOICE_SCHEMA,
+    handler=lambda args, **kw: _log_caption_choice(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)
+
+
+# ---------------------------------------------------------------------------
+# fastlane_recent_caption_history
+# ---------------------------------------------------------------------------
+
+RECENT_CAPTION_HISTORY_SCHEMA = {
+    "name": "fastlane_recent_caption_history",
+    "description": (
+        "Fetch the last N caption picks (chosen + rejected pairs) for "
+        "in-context tone learning. Call this at the START of the "
+        "fastlane-daily-plan workflow before drafting today's variants — "
+        "the returned records show Jonathan's recent taste so future "
+        "captions can match what he picks."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "Max records to return, newest-first. 1-100, default 10.",
+                "minimum": 1,
+                "maximum": 100,
+            },
+        },
+    },
+}
+
+
+def _recent_caption_history(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.RecentCaptionHistoryRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    records = fastlane_state.read_recent_caption_history(limit=req.limit)
+    return tool_result({"ok": True, "records": records, "count": len(records)})
+
+
+registry.register(
+    name="fastlane_recent_caption_history",
+    toolset=FASTLANE_TOOLSET,
+    schema=RECENT_CAPTION_HISTORY_SCHEMA,
+    handler=lambda args, **kw: _recent_caption_history(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)
