@@ -142,3 +142,45 @@ def test_read_recent_caption_history_skips_corrupt_lines(state_dir):
     )
     records = fastlane_state.read_recent_caption_history(limit=10)
     assert [r["content_id"] for r in records] == ["also_good", "good"]
+
+
+def test_save_picker_then_load(state_dir):
+    slot_a = {
+        "content_id": "p1", "media_url": "https://x/1.mp4",
+        "thumbnail_url": "https://x/1.webp", "type": "video-hook",
+        "variants": ["v1", "v2", "v3"],
+    }
+    slot_b = {
+        "content_id": "p2", "media_url": "https://x/2.mp4",
+        "thumbnail_url": "https://x/2.webp", "type": "wall-of-text",
+        "variants": ["w1", "w2", "w3"],
+    }
+    fastlane_state.save_picker("2026-06-05", slot_a=slot_a, slot_b=slot_b)
+    loaded = fastlane_state.load_picker("2026-06-05")
+    assert loaded is not None
+    assert loaded["date"] == "2026-06-05"
+    assert loaded["slot_a"]["content_id"] == "p1"
+    assert loaded["slot_b"]["variants"] == ["w1", "w2", "w3"]
+
+
+def test_save_picker_single_slot(state_dir):
+    slot_a = {
+        "content_id": "p1", "media_url": "u", "type": "video-hook",
+        "variants": ["v1"],
+    }
+    fastlane_state.save_picker("2026-06-05", slot_a=slot_a, slot_b=None)
+    loaded = fastlane_state.load_picker("2026-06-05")
+    assert loaded["slot_b"] is None
+
+
+def test_load_picker_missing_returns_none(state_dir):
+    assert fastlane_state.load_picker("1999-01-01") is None
+
+
+def test_save_picker_overwrites_same_date(state_dir):
+    slot = {"content_id": "p1", "media_url": "u", "type": "x", "variants": ["v1"]}
+    fastlane_state.save_picker("2026-06-05", slot_a=slot, slot_b=None)
+    slot2 = {"content_id": "p9", "media_url": "u", "type": "x", "variants": ["w1"]}
+    fastlane_state.save_picker("2026-06-05", slot_a=slot2, slot_b=None)
+    loaded = fastlane_state.load_picker("2026-06-05")
+    assert loaded["slot_a"]["content_id"] == "p9"
