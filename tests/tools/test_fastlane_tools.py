@@ -197,6 +197,8 @@ def test_recent_caption_history_returns_newest_first():
         "fastlane_mark_posted",
         "fastlane_log_caption_choice",
         "fastlane_recent_caption_history",
+        "fastlane_save_picker",
+        "fastlane_resolve_pick",
     ],
 )
 def test_tool_registered_under_fastlane_toolset(name):
@@ -205,4 +207,122 @@ def test_tool_registered_under_fastlane_toolset(name):
     assert entry.toolset == FASTLANE_TOOLSET
     assert entry.schema.get("name") == name
     assert entry.schema.get("parameters", {}).get("type") == "object"
+
+
+from tools.fastlane_tools import _save_picker, _resolve_pick
+
+
+def test_save_picker_persists():
+    payload = json.loads(_save_picker({
+        "date": "2026-06-05",
+        "slot_a": {
+            "content_id": "p1",
+            "media_url": "https://x/1.mp4",
+            "thumbnail_url": "https://x/1.webp",
+            "type": "video-hook",
+            "variants": [
+                "## Caption\nA1\n\n## Hashtags\n#a",
+                "## Caption\nA2\n\n## Hashtags\n#a",
+                "## Caption\nA3\n\n## Hashtags\n#a",
+            ],
+        },
+        "slot_b": {
+            "content_id": "p2",
+            "media_url": "https://x/2.mp4",
+            "type": "wall-of-text",
+            "variants": ["B1", "B2", "B3"],
+        },
+    }))
+    assert payload["ok"] is True
+    loaded = fastlane_state.load_picker("2026-06-05")
+    assert loaded["slot_a"]["content_id"] == "p1"
+    assert loaded["slot_b"]["variants"] == ["B1", "B2", "B3"]
+
+
+def test_resolve_pick_basic():
+    # Seed a picker
+    fastlane_state.save_picker(
+        "2026-06-05",
+        slot_a={
+            "content_id": "p1", "media_url": "https://x/1.mp4",
+            "thumbnail_url": "https://x/1.webp", "type": "video-hook",
+            "variants": [
+                "## Caption\nA1\n\n## Hashtags\n#a",
+                "## Caption\nA2\n\n## Hashtags\n#a",
+                "## Caption\nA3\n\n## Hashtags\n#a",
+            ],
+        },
+        slot_b=None,
+    )
+    payload = json.loads(_resolve_pick({
+        "date": "2026-06-05",
+        "slot": "a",
+        "variant_index": 2,
+    }))
+    assert payload["ok"] is True
+    assert "A2" in payload["chosen_caption"]
+    # Daily plan slot was written
+    slot = fastlane_state.get_slot("2026-06-05", "a")
+    assert slot is not None
+    assert slot["content_id"] == "p1"
+    assert "A2" in slot["chosen_caption"]
+    # History was appended with the two rejected variants
+    history = fastlane_state.read_recent_caption_history(limit=5)
+    assert len(history) == 1
+    assert history[0]["content_id"] == "p1"
+    assert len(history[0]["rejected"]) == 2
+
+
+def test_resolve_pick_applies_replacements():
+    fastlane_state.save_picker(
+        "2026-06-05",
+        slot_a={
+            "content_id": "p1", "media_url": "u", "type": "x",
+            "variants": [
+                "## Caption\nMeet Hank AI now.\n\n## Hashtags\n#hankai",
+                "## Caption\nHank AI is here.\n\n## Hashtags\n#hankai",
+            ],
+        },
+        slot_b=None,
+    )
+    payload = json.loads(_resolve_pick({
+        "date": "2026-06-05",
+        "slot": "a",
+        "variant_index": 1,
+        "replacements": [{"old": "Hank AI", "new": "Hank the Pro"}],
+    }))
+    assert payload["ok"] is True
+    assert "Hank the Pro" in payload["chosen_caption"]
+    assert "Hank AI" not in payload["chosen_caption"]
+
+
+def test_resolve_pick_missing_picker_errors():
+    payload = json.loads(_resolve_pick({
+        "date": "1999-01-01", "slot": "a", "variant_index": 1,
+    }))
+    assert "error" in payload
+
+
+def test_resolve_pick_index_out_of_range_errors():
+    fastlane_state.save_picker(
+        "2026-06-05",
+        slot_a={"content_id": "p1", "media_url": "u", "type": "x", "variants": ["v1", "v2"]},
+        slot_b=None,
+    )
+    payload = json.loads(_resolve_pick({
+        "date": "2026-06-05", "slot": "a", "variant_index": 5,
+    }))
+    assert "error" in payload
+
+
+def test_resolve_pick_missing_slot_errors():
+    fastlane_state.save_picker(
+        "2026-06-05",
+        slot_a={"content_id": "p1", "media_url": "u", "type": "x", "variants": ["v1"]},
+        slot_b=None,
+    )
+    payload = json.loads(_resolve_pick({
+        "date": "2026-06-05", "slot": "b", "variant_index": 1,
+    }))
+    assert "error" in payload
 
