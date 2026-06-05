@@ -56,12 +56,16 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
    - No `# Title` (TikTok carousel only; these are videos).
 
 4. **Persist the picker BEFORE sending Telegram.** Call `fastlane_save_picker` with
-   today's ET date, both slot objects (each containing `content_id`, `media_url`,
+   today's ET date and each slot object (each containing `content_id`, `media_url`,
    `thumbnail_url`, `type`, and the 3 full-format `variants`). This is the source
    of truth the chat-mode agent will consult when Jonathan replies with "A2" or
    "B1 with edits" — without it, Jonathan's tap can't be resolved.
 
-5. **Send Telegram pickers.** Two messages, one per post:
+   **Single-slot day (only 1 candidate from step 2):** pass `slot_b=null` to
+   `fastlane_save_picker`. The tool accepts a null slot.
+
+5. **Send Telegram pickers** — one message per filled slot (so two messages on a
+   normal day, one on a single-slot day):
    - **First line of message body must be the `media_url` (.mp4) on its own line** so
      Telegram auto-embeds the video preview.
    - Below the URL: a numbered label + the first line of each caption variant.
@@ -69,10 +73,15 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
      etc. for slot B.
    - Tell Jonathan he can reply with the label (e.g. `A2`) or with edits
      (e.g. `A2 but change "Hank AI" to "Hank the Pro"`).
+   - On a single-slot day, send ONLY the slot A message and mention in the
+     confirmation that slot B will skip today.
 
-6. **Confirmation message.** After both pickers are sent, end with a single line:
-   `Picker saved for <YYYY-MM-DD>. Reply with A1/A2/A3 (slot A) and B1/B2/B3
-   (slot B), with optional edits.`
+6. **Confirmation message.** End with a single line that matches what was actually
+   planned:
+   - Both slots filled → `Picker saved for <YYYY-MM-DD>. Reply with A1/A2/A3 (slot A)
+     and B1/B2/B3 (slot B), with optional edits.`
+   - Slot A only → `Picker saved for <YYYY-MM-DD>. Reply with A1/A2/A3 (slot A).
+     Slot B will skip today (Fastlane had only 1 unposted item).`
 
 ## How Jonathan's taps get resolved (NOT part of this cron)
 
