@@ -356,3 +356,158 @@ registry.register(
     check_fn=fastlane_client.check_fastlane_requirements,
     requires_env=_REQUIRES_ENV,
 )
+
+
+# ---------------------------------------------------------------------------
+# fastlane_save_picker
+# ---------------------------------------------------------------------------
+
+SAVE_PICKER_SCHEMA = {
+    "name": "fastlane_save_picker",
+    "description": (
+        "Persist today's picker (both slots' full caption variants + "
+        "content_ids + media_urls) to disk so the chat-mode agent can "
+        "resolve Jonathan's 'A2'/'B1' taps later. Call this in the "
+        "planning skill RIGHT BEFORE sending the Telegram picker "
+        "messages. slot_b may be null if only one unposted item was "
+        "available today."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "ET date YYYY-MM-DD."},
+            "slot_a": {
+                "type": ["object", "null"],
+                "description": "Slot A: content_id, media_url, thumbnail_url, type, variants (list of full publisher-format caption markdown).",
+            },
+            "slot_b": {
+                "type": ["object", "null"],
+                "description": "Slot B: same shape as slot_a, or null if only one unposted item today.",
+            },
+        },
+        "required": ["date"],
+    },
+}
+
+
+def _save_picker(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.SavePickerRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    record = fastlane_state.save_picker(
+        req.date,
+        slot_a=req.slot_a.model_dump() if req.slot_a else None,
+        slot_b=req.slot_b.model_dump() if req.slot_b else None,
+    )
+    return tool_result({"ok": True, "record": record})
+
+
+registry.register(
+    name="fastlane_save_picker",
+    toolset=FASTLANE_TOOLSET,
+    schema=SAVE_PICKER_SCHEMA,
+    handler=lambda args, **kw: _save_picker(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)
+
+
+# ---------------------------------------------------------------------------
+# fastlane_resolve_pick
+# ---------------------------------------------------------------------------
+
+RESOLVE_PICK_SCHEMA = {
+    "name": "fastlane_resolve_pick",
+    "description": (
+        "Resolve Jonathan's tap on a Telegram caption picker. When he "
+        "replies with 'A2' or 'B1 with Hank AI -> Hank the Pro', "
+        "the chat-mode agent calls this tool: it loads today's picker "
+        "from disk, picks the right variant (1-indexed: A1->1, A2->2, "
+        "A3->3), applies any text replacements, then atomically writes "
+        "to the daily plan + appends to caption history. Returns the "
+        "final resolved caption."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "ET date YYYY-MM-DD."},
+            "slot": {"type": "string", "enum": ["a", "b"]},
+            "variant_index": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "1-indexed variant Jonathan picked (A1->1, A2->2, A3->3).",
+            },
+            "replacements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "old": {"type": "string"},
+                        "new": {"type": "string"},
+                    },
+                    "required": ["old", "new"],
+                },
+                "description": "Optional text replacements to apply to the chosen variant in order. E.g., [{old: 'Hank AI', new: 'Hank the Pro'}].",
+            },
+        },
+        "required": ["date", "slot", "variant_index"],
+    },
+}
+
+
+def _resolve_pick(args: dict, **_kw: Any) -> str:
+    try:
+        req = t.ResolvePickRequest.model_validate(args)
+    except ValidationError as e:
+        return _validation_error(e)
+    picker = fastlane_state.load_picker(req.date)
+    if not picker:
+        return tool_error(f"no picker found for date {req.date}")
+    slot = picker.get(f"slot_{req.slot}")
+    if not slot:
+        return tool_error(f"slot {req.slot} is empty in the {req.date} picker")
+    variants = slot.get("variants", [])
+    if req.variant_index < 1 or req.variant_index > len(variants):
+        return tool_error(
+            f"variant_index {req.variant_index} out of range (have {len(variants)} variants in slot {req.slot})"
+        )
+    chosen = variants[req.variant_index - 1]
+    rejected = [v for i, v in enumerate(variants) if i != req.variant_index - 1]
+    # Apply text replacements to the chosen variant (in order, not to rejected).
+    for r in req.replacements:
+        chosen = chosen.replace(r.old, r.new)
+    # Atomic-ish: save daily plan slot, then append caption history.
+    fastlane_state.save_slot(
+        req.date,
+        req.slot,
+        content_id=slot["content_id"],
+        media_url=slot["media_url"],
+        chosen_caption=chosen,
+    )
+    fastlane_state.append_caption_history(
+        content_id=slot["content_id"],
+        type_=slot.get("type", "unknown"),
+        chosen=chosen,
+        rejected=rejected,
+    )
+    return tool_result({
+        "ok": True,
+        "date": req.date,
+        "slot": req.slot,
+        "content_id": slot["content_id"],
+        "media_url": slot["media_url"],
+        "chosen_caption": chosen,
+        "rejected_count": len(rejected),
+    })
+
+
+registry.register(
+    name="fastlane_resolve_pick",
+    toolset=FASTLANE_TOOLSET,
+    schema=RESOLVE_PICK_SCHEMA,
+    handler=lambda args, **kw: _resolve_pick(args, **kw),
+    check_fn=fastlane_client.check_fastlane_requirements,
+    requires_env=_REQUIRES_ENV,
+)

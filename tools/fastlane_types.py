@@ -116,3 +116,36 @@ class LogCaptionChoiceRequest(BaseModel):
 
 class RecentCaptionHistoryRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=100)
+
+
+class PickerSlot(BaseModel):
+    content_id: str
+    media_url: str
+    thumbnail_url: Optional[str] = None
+    type: str
+    variants: list[str] = Field(min_length=1)
+
+
+class DailyPicker(BaseModel):
+    date: str
+    created_at: str
+    slot_a: Optional[PickerSlot] = None
+    slot_b: Optional[PickerSlot] = None
+
+
+class SavePickerRequest(BaseModel):
+    date: str
+    slot_a: Optional[PickerSlot] = None
+    slot_b: Optional[PickerSlot] = None
+
+
+class TextReplacement(BaseModel):
+    old: str
+    new: str
+
+
+class ResolvePickRequest(BaseModel):
+    date: str
+    slot: Literal["a", "b"]
+    variant_index: int = Field(ge=1, le=10)
+    replacements: list[TextReplacement] = Field(default_factory=list)

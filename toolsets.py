@@ -241,7 +241,7 @@ TOOLSETS = {
     },
 
     "fastlane": {
-        "description": "Fastlane content tools — list unposted videos from usefastlane.ai, manage today's plan, mark posted, log caption picks for in-context learning. Gated on FASTLANE_API_KEY.",
+        "description": "Fastlane content tools — list unposted videos from usefastlane.ai, manage today's plan, mark posted, log caption picks for in-context learning, persist and resolve Telegram caption pickers for chat-mode pick resolution. Gated on FASTLANE_API_KEY.",
         "tools": [
             "fastlane_list_unposted",
             "fastlane_save_daily_plan",
@@ -249,6 +249,8 @@ TOOLSETS = {
             "fastlane_mark_posted",
             "fastlane_log_caption_choice",
             "fastlane_recent_caption_history",
+            "fastlane_save_picker",
+            "fastlane_resolve_pick",
         ],
         "includes": [],
     },

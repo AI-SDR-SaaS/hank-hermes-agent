@@ -226,3 +226,40 @@ def read_recent_caption_history(*, limit: int = 10) -> list[dict]:
         logger.warning("caption_history.jsonl unreadable: %s", e)
         return []
     return list(reversed(buf))
+
+
+# ---------------------------------------------------------------------------
+# pickers/<date>.json — per-day picker snapshots for chat-mode resolution
+# ---------------------------------------------------------------------------
+
+
+def _pickers_dir() -> Path:
+    return _state_dir() / "pickers"
+
+
+def _picker_path(date: str) -> Path:
+    return _pickers_dir() / f"{date}.json"
+
+
+def save_picker(date: str, *, slot_a: Optional[dict], slot_b: Optional[dict]) -> dict:
+    """Write today's picker JSON atomically. Overwrites if already present.
+
+    Each slot dict must contain: content_id, media_url, type, variants (list).
+    thumbnail_url is optional.
+    """
+    record = {
+        "date": date,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "slot_a": slot_a,
+        "slot_b": slot_b,
+    }
+    _atomic_write_json(_picker_path(date), record)
+    return record
+
+
+def load_picker(date: str) -> Optional[dict]:
+    """Return the picker dict for ``date`` or None if missing/corrupt."""
+    data = _read_json(_picker_path(date))
+    if not isinstance(data, dict):
+        return None
+    return data
