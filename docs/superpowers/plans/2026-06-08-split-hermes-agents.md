@@ -156,7 +156,9 @@ restartPolicyMaxRetries = 10
 healthcheckTimeout = 300
 ```
 
-Add (Task 6 sets this per service, but record it here): set env `HERMES_WEB_DIST=/opt/hermes/web/dist` so `hermes dashboard` uses the image-built UI instead of rebuilding at boot. (Confirm the build output path: `railway ssh "ls /opt/hermes/web/dist"` should list `index.html`.)
+No `HERMES_WEB_DIST` env needed — the Dockerfile already bakes it
+(`ENV HERMES_WEB_DIST=/opt/hermes/hermes_cli/web_dist`) and builds the UI there, so
+`hermes dashboard` uses the prebuilt assets and won't rebuild at boot.
 
 - [ ] **Step 4: Verify the script parses**
 
@@ -188,7 +190,8 @@ auth key in the Tailscale admin console. **Set the secrets in the Railway dashbo
 - `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` = `admin`
 - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` = a strong, unique password
 - `HERMES_DASHBOARD_BASIC_AUTH_SECRET` = `openssl rand -base64 32` (generate locally; paste in UI)
-- `HERMES_WEB_DIST` = `/opt/hermes/web/dist`
+
+(No `HERMES_WEB_DIST` — baked into the image at `/opt/hermes/hermes_cli/web_dist`.)
 
 - [ ] **Step 2: Deploy**
 
@@ -268,8 +271,9 @@ a fresh dashboard password). Enter these **in the UI** too (they're secrets):
 - `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` = `admin`
 - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` = a strong, unique password
 - `HERMES_DASHBOARD_BASIC_AUTH_SECRET` = output of `openssl rand -base64 32` (generate locally; paste into the UI)
-- `HERMES_WEB_DIST` = `/opt/hermes/web/dist`
 - Blog publishing (Social owns it): `AIRTABLE_API_KEY`, `BLOG_API_KEY`, `TELEGRAM_CHAT_ID` (copy from KG via the Raw Editor)
+
+(No `HERMES_WEB_DIST` — baked into the image.)
 
 Do NOT set web-only vars (`WEBSITE_GITHUB_TOKEN`, PostHog keys) on SOC.
 
@@ -533,5 +537,5 @@ git commit -m "docs: record final agent-split placement and soak results"
 - **Gateway is independent of Tailscale (by design):** the start script runs the gateway first and treats Tailscale/dashboard as best-effort (not `set -e`), so if `tailscaled`/`tailscale serve` fails, the dashboard is simply unreachable while the gateway/crons keep running. The container's lifetime tracks the gateway, not the dashboard.
 - **Tailscale in-container:** uses userspace networking (no TUN). The tailnet IP is virtual and not bindable — hence loopback bind + `tailscale serve` (do NOT bind the dashboard to the tailnet IP). Confirm `tailscale`/`tailscaled` install in the image (Task 3 Step 2), the boot-race wait, and that `tailscale serve status` shows `:9119` (Task 4 Step 3) before relying on Desktop access.
 - **Cross-volume seed transfer (Task 7):** the Dropbox bridge is the fiddliest step; if it stalls, fall back to recreating social config from defaults + `hermes cron create` and copying `memories/MEMORY.md` manually.
-- **`HERMES_WEB_DIST` path:** if `/opt/hermes/web/dist` is wrong, `hermes dashboard` will try to rebuild at boot (slow). Confirm the path in Task 3 Step 3.
+- **Dashboard UI assets:** `HERMES_WEB_DIST` is baked into the image at `/opt/hermes/hermes_cli/web_dist` (built during `docker build`), so `hermes dashboard` serves prebuilt assets and won't rebuild at boot. No env override needed.
 - **Splitting may not fix a non-load cron bug:** Task 9 / Task 12 cron-tick checks confirm crons actually run post-split before declaring success.

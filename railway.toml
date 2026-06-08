@@ -3,7 +3,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "/opt/hermes/.venv/bin/hermes gateway run"
+# Runs the gateway (Telegram + cron) AND the dashboard (for Hermes Desktop) over
+# Tailscale. See docker/start-railway.sh and docs/superpowers/plans/2026-06-08-split-hermes-agents.md.
+startCommand = "/opt/hermes/docker/start-railway.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 healthcheckTimeout = 300
