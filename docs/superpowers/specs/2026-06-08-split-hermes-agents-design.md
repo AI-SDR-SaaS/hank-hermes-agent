@@ -88,14 +88,26 @@ Hermes backend and stays managed as it is today.
 
 ## Workload / cron assignment
 
-| Social agent | Web/Analytics/Ads agent (`kind-generosity`) |
-|---|---|
-| Fastlane daily-plan cron (2 posts/day) | PostHog monitor digest cron |
-| Caption drafting, ad-hoc quick-post | `ai-assistant-website` PR/edit loop (Vercel + Cubic) |
-| `publisher_quick_post*` tools, Dropbox | Paid-ads work *(scope TBD — separate spec)* |
+Finalized from the live inventory + operator decisions (2026-06-08). See
+`docs/superpowers/plans/inventory-2026-06-08.md` for the full item-by-item mapping.
 
-Exact cron names and enabled toolsets are enumerated from each live config as
-implementation step 1, using **name-only inspection** (no config/secret value dumps).
+| Social / Content agent | Web / Analytics / Ads agent (`kind-generosity`) |
+|---|---|
+| Fastlane (daily-plan + publish slots A/B), IG/TikTok, ad-hoc quick-post | PostHog analytics: monitor skill + daily-digest cron + posthog MCP |
+| X (drafter/publisher/scheduler/trend-watcher), Reddit engagement | `ai-assistant-website` code-edit loop (GitHub PR + Vercel + Cubic) |
+| **Blog** (drafter/restructure/publisher cron) | Cold outbound / SDR: cold-email-drafter, smartlead-operator + smartlead MCP, where-they-live |
+| Hormozi copywriting, higgsfield (image/video), airtable approval hub, publisher tools, Dropbox | Paid-ads work *(scope TBD — separate spec)*; keeps the **Ace** bot |
+
+**Note (broader split than first sketched):** the Social agent owns the *entire content
+motion* (incl. blog + reddit + copy), and the Web agent is analytics + website engineering
++ cold outbound. **Open dependency:** blog is authored on Social but the blog site is owned
+by the Web agent (`ai-assistant-website`) — confirm where `blog-publisher-cron` publishes
+and grant the Social agent the needed access (or define a Social→Web handoff) before
+wiring blog crons onto Social.
+
+Also disable the ~80 irrelevant always-on builtin skills per agent (mlops, gaming,
+smart-home, etc.) — a direct reduction of the context bloat that contributed to the
+overload, independent of the split.
 
 ## Decisions
 
