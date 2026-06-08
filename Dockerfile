@@ -14,8 +14,23 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
 # that would otherwise accumulate when hermes runs as PID 1. See #15012.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential nodejs npm python3 ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client docker-cli tini && \
+        build-essential nodejs npm python3 ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client docker-cli tini curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
+
+# Tailscale (static binaries) for private dashboard access over the tailnet.
+# Userspace networking is used at runtime (no TUN device on Railway). Resolve the
+# arch (matches the rest of this multi-arch image); the inner tarball dir is
+# version-stamped, so match the binaries by wildcard.
+RUN ARCH="$(dpkg --print-architecture)" && \
+    case "$ARCH" in \
+      amd64) TS_ARCH="amd64" ;; \
+      arm64) TS_ARCH="arm64" ;; \
+      *) echo "Unsupported architecture for Tailscale: $ARCH" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://pkgs.tailscale.com/stable/tailscale_latest_${TS_ARCH}.tgz" \
+      | tar -xzf - --strip-components=1 -C /usr/local/bin \
+        --wildcards '*/tailscale' '*/tailscaled' && \
+    chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
 
 # Non-root user for runtime; UID can be overridden via HERMES_UID at runtime
 RUN useradd -u 10000 -m -d /opt/data hermes
@@ -52,6 +67,9 @@ RUN cd web && npm run build && \
 # The venv needs to be traversable too.
 USER root
 RUN chmod -R a+rX /opt/hermes
+# The Railway start script needs an explicit execute bit (a+rX above won't add +x
+# to a file that wasn't already executable, e.g. when checked out on Windows).
+RUN chmod +x /opt/hermes/docker/start-railway.sh
 # Start as root so the entrypoint can usermod/groupmod + gosu.
 # If HERMES_UID is unset, the entrypoint drops to the default hermes user (10000).
 
