@@ -81,10 +81,14 @@ Hermes backend and stays managed as it is today.
   either (Telegram polls outbound; cron is internal) — so the services need **no public
   Railway domain** at all.
 - Change each service's Railway start command from `hermes gateway run` to a wrapper that:
-  (1) brings up Tailscale, (2) starts the gateway in the background, (3) runs the dashboard
-  in the foreground bound to the tailnet IP (`--insecure` is still required to bind a
-  non-localhost host). Both processes share the same `HERMES_HOME`/profile so the dashboard
-  controls the same agent the gateway runs. Tailscale must be installed in the Docker image.
+  (1) starts the **gateway first** (the critical path) as the process the container's
+  lifetime tracks; (2) brings up Tailscale **best-effort** (waits for the daemon socket
+  before `tailscale up`; a Tailscale failure logs a warning but does NOT abort the gateway);
+  (3) runs the dashboard on **`127.0.0.1:9119`** and exposes it on the tailnet via
+  `tailscale serve`. In userspace-networking mode the tailnet IP is virtual and not
+  bindable, so the dashboard binds loopback (no `--insecure` needed) and Tailscale proxies
+  inbound tailnet traffic to it. Both processes share the same `HERMES_HOME`/profile.
+  Tailscale must be installed in the Docker image.
 - **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
   access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
   in this codebase (OAuth here is for model providers). Binding a public host requires the

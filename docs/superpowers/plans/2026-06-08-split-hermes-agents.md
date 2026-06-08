@@ -94,32 +94,36 @@ Expected: `{"ok":true,...,"username":"<your_bot>"}`.
 
 ```bash
 #!/bin/bash
-# Railway start command: bring up Tailscale, then run the gateway (Telegram +
-# cron) and the dashboard (web API for Hermes Desktop) in one container. The
-# dashboard binds to the TAILNET IP only — it is NOT exposed on a public port.
-# The gateway uses outbound Telegram polling + an internal cron loop.
-set -euo pipefail
+# Railway start: gateway (Telegram + cron) is the CRITICAL path and runs first,
+# independent of Tailscale. The dashboard (web API for Hermes Desktop) is exposed
+# privately over Tailscale on a best-effort basis — if Tailscale or the dashboard
+# fails, the gateway/crons keep running.
+#
+# NOTE: not `set -e` — Tailscale/dashboard hiccups must not abort the gateway.
+set -uo pipefail
 
-# Tailscale (userspace networking — no TUN device needed in the container).
-mkdir -p /var/run/tailscale
-tailscaled --tun=userspace-networking --state=/opt/data/tailscaled.state \
-  --socket=/var/run/tailscale/tailscaled.sock &
-tailscale up --authkey="${TS_AUTHKEY}" \
-  --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}"
-TS_IP="$(tailscale ip -4)"
-
-# Gateway in the background (Telegram channels + cron scheduler).
+# --- Gateway first (critical): the container's lifetime tracks this process ---
 hermes gateway run &
 GATEWAY_PID=$!
 
-# If the gateway dies, take the container down so Railway restarts it cleanly.
-trap 'kill -TERM "$GATEWAY_PID" 2>/dev/null || true' EXIT
-( while kill -0 "$GATEWAY_PID" 2>/dev/null; do sleep 5; done; echo "gateway exited"; kill -TERM 1 ) &
+# --- Tailscale (best-effort, userspace networking — Railway has no TUN device) ---
+# The tailnet IP is virtual in userspace mode and NOT bindable, so the dashboard
+# binds to loopback and `tailscale serve` proxies inbound tailnet traffic to it.
+mkdir -p /var/run/tailscale
+tailscaled --tun=userspace-networking --state=/opt/data/tailscaled.state \
+  --socket=/var/run/tailscale/tailscaled.sock &
+# Wait for the daemon socket before `tailscale up` (fixes the boot race).
+for _ in $(seq 1 30); do tailscale status >/dev/null 2>&1 && break; sleep 1; done
+tailscale up --authkey="${TS_AUTHKEY}" \
+  --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}" \
+  || echo "WARN: tailscale up failed — dashboard unreachable; gateway continues"
 
-# Dashboard bound to the tailnet IP only (reachable from Hermes Desktop over the
-# tailnet). --insecure is REQUIRED to bind a non-localhost host (web_server.py:3142).
-# basic-auth (HERMES_DASHBOARD_BASIC_AUTH_*) is set as defense-in-depth (Task 4).
-exec hermes dashboard --no-open --insecure --host "$TS_IP" --port 9119
+# --- Dashboard on loopback (no --insecure needed); Tailscale serves it on the tailnet ---
+hermes dashboard --no-open --host 127.0.0.1 --port 9119 &
+tailscale serve --bg 9119 || echo "WARN: tailscale serve failed — dashboard not on tailnet"
+
+# Container lives as long as the gateway lives; gateway exit → restart by Railway.
+wait "$GATEWAY_PID"
 ```
 
 - [ ] **Step 2: Install Tailscale + make the script executable in the image**
@@ -186,20 +190,20 @@ railway up --service e7d29fc1-9dd0-4715-98af-3b7fe9d5e567
 ```
 Expected: build succeeds, deployment goes `SUCCESS`.
 
-- [ ] **Step 3: Verify Tailscale joined, the dashboard is up on the tailnet, and the gateway runs**
+- [ ] **Step 3: Verify gateway runs, Tailscale joined, and the dashboard is served**
 
 ```powershell
-railway ssh "tailscale status; tailscale ip -4"
 railway ssh "/opt/hermes/.venv/bin/hermes gateway status; /opt/hermes/.venv/bin/hermes cron status"
+railway ssh "tailscale status; tailscale serve status"
 ```
-Expected: the node is online in `tailscale status`; a tailnet IP prints; gateway + cron scheduler running. Confirm the node also shows in the Tailscale admin console.
+Expected: gateway + cron scheduler running (independent of Tailscale); the node is online in `tailscale status`; `tailscale serve status` shows `:9119` proxied. Confirm the node in the Tailscale admin console.
 
 - [ ] **Step 4: Verify reachability over the tailnet (from a tailnet machine)**
 
-From Jonathan's machine (on the same tailnet):
+From Jonathan's machine (on the same tailnet). `tailscale serve` exposes it as HTTPS on the node's MagicDNS name:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://hank-web:9119/health   # MagicDNS name
+curl -s -o /dev/null -w "%{http_code}\n" https://hank-web.<your-tailnet>.ts.net/health
 ```
 Expected: `200` over the tailnet; unreachable from off-tailnet (confirms it's private). The basic-auth prompt appears for the dashboard UI.
 
@@ -468,12 +472,12 @@ Install Tailscale on the same machine and sign into the **same tailnet** as the 
 - [ ] **Step 2: Create the Social profile → SOC dashboard (over tailnet)**
 
 In Desktop: Profiles → new profile "social" → Settings → Gateway → Remote gateway → URL =
-`http://hank-social:9119` (Tailscale MagicDNS name) → sign in with SOC's basic-auth creds
-(Task 6). Save & reconnect.
+`https://hank-social.<your-tailnet>.ts.net` (the `tailscale serve` HTTPS MagicDNS URL) →
+sign in with SOC's basic-auth creds (Task 6). Save & reconnect.
 
 - [ ] **Step 3: Create the Web profile → KG dashboard (over tailnet)**
 
-New profile "web" → Remote gateway URL = `http://hank-web:9119` (Tailscale MagicDNS name) →
+New profile "web" → Remote gateway URL = `https://hank-web.<your-tailnet>.ts.net` →
 sign in with KG's basic-auth creds (Task 4). Save & reconnect.
 
 - [ ] **Step 4: Verify the profile switcher**
@@ -518,8 +522,9 @@ git commit -m "docs: record final agent-split placement and soak results"
 
 ## Risks
 
-- **Dashboard security = Tailscale-private (decided):** dashboards are not internet-facing; they bind to the tailnet IP and are reachable only over Tailscale, with basic-auth as defense-in-depth. `--insecure` only binds the non-localhost (tailnet) interface — it is not publicly exposed. Risks shift to Tailscale: the `TS_AUTHKEY` is a secret (use reusable+ephemeral keys so dead nodes auto-expire); if `tailscaled` fails to come up, the dashboard is unreachable (the agent/crons still run — gateway is independent).
-- **Tailscale in-container:** uses userspace networking (no TUN). Confirm `tailscale`/`tailscaled` install in the image (Task 3 Step 2) and that the node registers (Task 4 Step 3) before relying on Desktop access.
+- **Dashboard security = Tailscale-private (decided):** dashboards are not internet-facing. The dashboard binds to `127.0.0.1:9119` and `tailscale serve` proxies inbound tailnet traffic to it, so it's reachable only over the tailnet (HTTPS via MagicDNS), with basic-auth as defense-in-depth. The `TS_AUTHKEY` is a secret — use reusable+ephemeral keys so dead Railway nodes auto-expire.
+- **Gateway is independent of Tailscale (by design):** the start script runs the gateway first and treats Tailscale/dashboard as best-effort (not `set -e`), so if `tailscaled`/`tailscale serve` fails, the dashboard is simply unreachable while the gateway/crons keep running. The container's lifetime tracks the gateway, not the dashboard.
+- **Tailscale in-container:** uses userspace networking (no TUN). The tailnet IP is virtual and not bindable — hence loopback bind + `tailscale serve` (do NOT bind the dashboard to the tailnet IP). Confirm `tailscale`/`tailscaled` install in the image (Task 3 Step 2), the boot-race wait, and that `tailscale serve status` shows `:9119` (Task 4 Step 3) before relying on Desktop access.
 - **Cross-volume seed transfer (Task 7):** the Dropbox bridge is the fiddliest step; if it stalls, fall back to recreating social config from defaults + `hermes cron create` and copying `memories/MEMORY.md` manually.
 - **`HERMES_WEB_DIST` path:** if `/opt/hermes/web/dist` is wrong, `hermes dashboard` will try to rebuild at boot (slow). Confirm the path in Task 3 Step 3.
 - **Splitting may not fix a non-load cron bug:** Task 9 / Task 12 cron-tick checks confirm crons actually run post-split before declaring success.
