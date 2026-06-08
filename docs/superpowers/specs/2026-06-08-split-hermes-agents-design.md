@@ -105,6 +105,52 @@ implementation step 1, using **name-only inspection** (no config/secret value du
   split does not block on it.
 - **Dashboard auth:** default to Nous Portal OAuth per service.
 
+## Repository layout & git management
+
+Both Hermes agents run the **same engine code** from a single repo. They are *not* forked
+per agent — differentiation is entirely runtime (Railway env + volume state).
+
+| Repo | Deploys to | Role in the split |
+|---|---|---|
+| `AI-SDR-SaaS/hank-hermes-agent` | `kind-generosity` **and** the new social service | One repo builds **both** Hermes agents |
+| `AI-SDR-SaaS/hermes-social-media` | `athletic-joy` (publisher) | Unchanged |
+| `AI-SDR-SaaS/ai-assistant-website` | website (Vercel) | Web agent edits via PR |
+
+**Code vs. config:**
+
+- **Code (shared, in git):** the Hermes engine, `Dockerfile`, `entrypoint.sh`,
+  `railway.toml`, bundled skills — in `hank-hermes-agent`. A push redeploys both Hermes
+  services. Both need the same structural change (gateway + dashboard start command), so a
+  shared repo is appropriate; no per-agent fork or branch is required.
+- **Per-agent differences (NOT forked in git):**
+  - **Railway env vars** (per service): Telegram bot token, API keys, feature flags.
+  - **Volume state** (`/opt/data`, per service): `config.yaml` (enabled toolsets),
+    `SOUL.md`/`AGENTS.md` (persona), crons, memory.
+- The existing `entrypoint.sh` already gates Hank/social-specific behavior on env
+  (publisher webhook injected only when `PUBLISHER_WEBHOOK_HMAC_SECRET` is set; SOUL
+  patched only when the social strings are present), so one repo cleanly produces two
+  differentiated agents.
+
+**Where artifacts are committed:**
+
+- Design + planning docs (this spec, future plans) → `hank-hermes-agent`,
+  `docs/superpowers/specs/`.
+- Engine/structural code (start command, entrypoint, skills) → `hank-hermes-agent`.
+- Publisher changes → `hermes-social-media`. Website changes → `ai-assistant-website`.
+
+**Version-controlling per-agent config (decision):** hybrid approach —
+
+- Keep *structural* per-agent bootstrapping (which toolsets/crons/SOUL each agent gets) in
+  the repo behind env flags, extending the existing `entrypoint.sh` pattern, so deploys are
+  reproducible.
+- Let *memory and live tweaks* remain volume state, protected by `hermes backup` / profile
+  export rather than git.
+
+**Deploy behavior:** both Hermes services set their Railway source to `hank-hermes-agent`.
+A push redeploys both; per-service env + volume keep them differentiated. If independent
+deploy timing is later needed, use Railway watch paths or per-service branches — not
+required for the initial split.
+
 ## Implementation sequencing (low-risk order)
 
 1. Enumerate live crons/toolsets on the current agent (name-only).
