@@ -80,9 +80,11 @@ Hermes backend and stays managed as it is today.
   starts the gateway in the background and runs the dashboard in the foreground on `$PORT`
   (or the equivalent supported multi-process invocation). Confirm both processes share the
   same `HERMES_HOME`/profile so the dashboard controls the same agent the gateway runs.
-- **Dashboard auth:** Nous Portal OAuth per service (`hermes dashboard register`), suitable
-  for a public Railway URL. Basic-auth is a fallback but is not recommended for a
-  public-facing URL.
+- **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
+  access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
+  in this codebase (OAuth here is for model providers). Binding a public host requires the
+  `--insecure` flag. The remaining security lever is **network reachability** — see the
+  "Dashboard exposure" decision below.
 
 ## Workload / cron assignment
 
@@ -103,7 +105,12 @@ implementation step 1, using **name-only inspection** (no config/secret value du
 - **Bots:** Web agent keeps the existing Ace bot; Social agent gets a new bot token.
 - **Paid-ads deferred:** kept off this split's critical path; specced separately so the
   split does not block on it.
-- **Dashboard auth:** default to Nous Portal OAuth per service.
+- **Dashboard auth:** basic-auth (the only dashboard auth in this Hermes version), with a
+  strong unique password per service.
+- **Dashboard exposure (PENDING operator decision):** either (a) expose each dashboard on
+  its public Railway HTTPS URL behind basic-auth (simple; acceptable single-user), or
+  (b) keep dashboards private and reach them over Tailscale/VPN (more secure, more setup).
+  This is the real security lever now that OAuth isn't an option.
 
 ## Repository layout & git management
 

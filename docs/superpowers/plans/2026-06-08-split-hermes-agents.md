@@ -103,7 +103,10 @@ trap 'kill -TERM "$GATEWAY_PID" 2>/dev/null || true' EXIT
 ( while kill -0 "$GATEWAY_PID" 2>/dev/null; do sleep 5; done; echo "gateway exited"; kill -TERM 1 ) &
 
 # Dashboard in the foreground on Railway's public port (for Hermes Desktop).
-exec hermes dashboard --no-open --host 0.0.0.0 --port "${PORT:-9119}"
+# --insecure is REQUIRED to bind a non-localhost host; without it the server
+# refuses to start (web_server.py:3142). The basic-auth gate
+# (HERMES_DASHBOARD_BASIC_AUTH_*) MUST be set (Task 4) before exposing it.
+exec hermes dashboard --no-open --insecure --host 0.0.0.0 --port "${PORT:-9119}"
 ```
 
 - [ ] **Step 2: Make it executable in the image**
@@ -148,12 +151,12 @@ git commit -m "feat(deploy): run gateway + dashboard together for Hermes Desktop
 
 - [ ] **Step 1: Set dashboard auth + web-dist env on KG**
 
-Basic-auth is used because it works headless (no interactive browser flow); Railway terminates TLS so it travels over HTTPS. (Security note: acceptable for single-user; harden later with Tailscale or Nous Portal OAuth — see Risks.)
+This Hermes version exposes the dashboard with **basic-auth only** (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for dashboard *access* in this codebase (OAuth here is for model providers via `hermes auth add nous`). The `--insecure` flag in the start script binds the non-localhost host; the basic-auth gate is what protects it. The remaining security lever is **network reachability** — see the "Dashboard exposure" decision in the spec/Risks (public-over-HTTPS vs Tailscale-private). Set a strong, unique password regardless.
 
 ```bash
 railway link   # kind-generosity → production → hank-hermes-agent
 railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=<strong-password>"
+railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=<strong-unique-password>"
 railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_SECRET=$(openssl rand -base64 32)"
 railway variables --set "HERMES_WEB_DIST=/opt/hermes/web/dist"
 ```
@@ -207,34 +210,39 @@ Expected: prints the `hank-social` service ID. Record it as `SOC`.
 
 **Files:** none (Railway env).
 
-- [ ] **Step 1: List KG's variable names**
+> **Do NOT dump secret values to the terminal** (no `railway variables --kv`) — it
+> leaks credentials into shell history/logs. Copy secrets via the Railway dashboard's
+> in-browser Variables editor, and verify by **name only**.
 
-```bash
-railway variables --service e7d29fc1-9dd0-4715-98af-3b7fe9d5e567 --kv
-```
-Expected: all KG env vars (names + values). These are the integration secrets (model keys, Dropbox refresh-token trio, publisher creds, etc.).
+- [ ] **Step 1: Identify which variables KG has (names only)**
 
-- [ ] **Step 2: Copy the integration vars onto SOC, EXCEPT the bot token and web-only keys**
+In the Railway dashboard → KG service → **Variables** tab, read the variable **names**
+(values stay masked in the UI). From the Task 1 inventory, mark which the social agent
+needs (model/provider keys, `DROPBOX_APP_KEY`/`DROPBOX_APP_SECRET`/`DROPBOX_REFRESH_TOKEN`,
+publisher-integration vars) vs. web-only (`WEBSITE_GITHUB_TOKEN`, PostHog keys → exclude).
 
-Set on `SOC` everything social needs: model/provider keys, Dropbox (`DROPBOX_APP_KEY`/`DROPBOX_APP_SECRET`/`DROPBOX_REFRESH_TOKEN`), and any publisher-integration vars the social agent uses to drive the publisher. Use the new bot token from Task 2:
+- [ ] **Step 2: Copy the needed secrets onto SOC via the Railway UI (no terminal)**
+
+In the Railway dashboard → KG **Variables** → **Raw Editor**, copy the lines for the
+social-needed vars, then paste them into SOC's Raw Editor. This stays in-browser — values
+never touch shell history. Then set SOC-specific values (the new bot token from Task 2 and
+a fresh dashboard password). Enter these **in the UI** too (they're secrets):
+
+- `TELEGRAM_BOT_TOKEN` = the new "Hank Social" token (Task 2)
+- `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` = `admin`
+- `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` = a strong, unique password
+- `HERMES_DASHBOARD_BASIC_AUTH_SECRET` = output of `openssl rand -base64 32` (generate locally; paste into the UI)
+- `HERMES_WEB_DIST` = `/opt/hermes/web/dist`
+
+Do NOT set web-only vars (`WEBSITE_GITHUB_TOKEN`, PostHog keys) on SOC.
+
+- [ ] **Step 3: Verify the var set by name only**
 
 ```bash
 railway link   # select SOC
-railway variables --set "TELEGRAM_BOT_TOKEN=<NEW_HANK_SOCIAL_TOKEN>"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=<strong-password-2>"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_SECRET=$(openssl rand -base64 32)"
-railway variables --set "HERMES_WEB_DIST=/opt/hermes/web/dist"
-# ...plus each social integration var identified in Step 1
+railway variables | awk '{print $1}'   # names column only — do NOT print values
 ```
-Do NOT set web-only vars (e.g. `WEBSITE_GITHUB_TOKEN`, PostHog keys) on SOC.
-
-- [ ] **Step 3: Verify the var set**
-
-```bash
-railway variables --service <SOC_ID> --kv
-```
-Expected: social + Dropbox + new bot token present; no website/PostHog keys.
+Expected (by name): social + Dropbox vars + `TELEGRAM_BOT_TOKEN` + dashboard auth vars present; no `WEBSITE_GITHUB_TOKEN`/PostHog names. (Or just confirm names in the Railway UI.)
 
 ### Task 7: Seed SOC's volume with social config + memory (Dropbox bridge)
 
@@ -473,7 +481,7 @@ git commit -m "docs: record final agent-split placement and soak results"
 
 ## Risks
 
-- **Dashboard exposed publicly with basic-auth:** acceptable over Railway HTTPS for a single user; harden by binding behind Tailscale or switching to Nous Portal OAuth (`hermes dashboard register`) once the split is stable.
+- **Dashboard exposed publicly with basic-auth:** this Hermes version supports basic-auth only for the dashboard (no OAuth for dashboard access; `--insecure` is required to bind a public host, which "exposes API keys on the network" per its own help text). Over Railway's HTTPS with a strong unique password this is acceptable for a single user, but the dashboard can read API keys and run agent commands — treat it as protected. The real hardening lever is **network reachability**: prefer Tailscale/private networking over public exposure if you want defense-in-depth. **Pending operator decision** (see spec "Dashboard exposure").
 - **Cross-volume seed transfer (Task 7):** the Dropbox bridge is the fiddliest step; if it stalls, fall back to recreating social config from defaults + `hermes cron create` and copying `memories/MEMORY.md` manually.
 - **`HERMES_WEB_DIST` path:** if `/opt/hermes/web/dist` is wrong, `hermes dashboard` will try to rebuild at boot (slow). Confirm the path in Task 3 Step 3.
 - **Splitting may not fix a non-load cron bug:** Task 9 / Task 12 cron-tick checks confirm crons actually run post-split before declaring success.
