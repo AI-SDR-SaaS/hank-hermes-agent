@@ -24,27 +24,32 @@
 
 **Files:** none (produces `docs/superpowers/plans/inventory-2026-06-08.md`, a working note).
 
-- [ ] **Step 1: Open a one-shot SSH into KG and list crons**
+> `hermes` is not on the SSH `$PATH` — use the full venv path `/opt/hermes/.venv/bin/hermes`.
+> On Windows, run these via PowerShell, not Git Bash (Git Bash mangles `/opt/...` paths).
+> There is **no `hermes toolsets` subcommand** — enabled toolsets live in `config.yaml`.
 
-```bash
+- [ ] **Step 1: One-shot SSH into KG and list crons**
+
+```powershell
 railway link   # choose: kind-generosity → production → hank-hermes-agent
-railway ssh "hermes cron list"
+railway ssh "/opt/hermes/.venv/bin/hermes cron list"
 ```
 Expected: a table of cron jobs with names/IDs/schedules. Record each.
 
-- [ ] **Step 2: List enabled toolsets and installed skills**
+- [ ] **Step 2: List installed skills and enabled toolsets**
 
-```bash
-railway ssh "hermes toolsets list; echo '---SKILLS---'; hermes skills list"
+```powershell
+railway ssh "/opt/hermes/.venv/bin/hermes skills list"
+railway ssh "grep -A40 '^toolsets:' /opt/data/config.yaml"   # toolset NAMES only (no secret values)
 ```
-Expected: toolset names and skill names. Record each.
+Expected: skill names (local Hank skills are the split signal); toolset names from config.
 
 - [ ] **Step 3: List configured MCP servers (to catch the Higgsfield noise)**
 
-```bash
-railway ssh "hermes mcp list"
+```powershell
+railway ssh "/opt/hermes/.venv/bin/hermes mcp list"
 ```
-Expected: includes a Higgsfield entry (the headless-OAuth loop). Note it for removal in Task 12.
+Expected: includes a Higgsfield entry (the headless-OAuth loop). Note it for Task 12.
 
 - [ ] **Step 4: Classify each item Social vs Web and write the inventory note**
 
