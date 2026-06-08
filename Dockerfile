@@ -18,9 +18,16 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Tailscale (static binaries) for private dashboard access over the tailnet.
-# Userspace networking is used at runtime (no TUN device on Railway). The inner
-# tarball dir is version-stamped, so match the binaries by wildcard.
-RUN curl -fsSL https://pkgs.tailscale.com/stable/tailscale_latest_amd64.tgz \
+# Userspace networking is used at runtime (no TUN device on Railway). Resolve the
+# arch (matches the rest of this multi-arch image); the inner tarball dir is
+# version-stamped, so match the binaries by wildcard.
+RUN ARCH="$(dpkg --print-architecture)" && \
+    case "$ARCH" in \
+      amd64) TS_ARCH="amd64" ;; \
+      arm64) TS_ARCH="arm64" ;; \
+      *) echo "Unsupported architecture for Tailscale: $ARCH" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://pkgs.tailscale.com/stable/tailscale_latest_${TS_ARCH}.tgz" \
       | tar -xzf - --strip-components=1 -C /usr/local/bin \
         --wildcards '*/tailscale' '*/tailscaled' && \
     chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
