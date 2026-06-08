@@ -4,9 +4,9 @@
 
 **Goal:** Split the overloaded single Hermes agent into two focused Hermes agents (Social, and Web/Analytics/Ads) plus the unchanged publisher, each managed via Hermes Desktop.
 
-**Architecture:** One engine repo (`hank-hermes-agent`) builds both Hermes services; they are differentiated only by Railway env vars + per-volume config. Each service runs `hermes gateway run` (Telegram + cron) and `hermes dashboard` (the web API Hermes Desktop connects to) together, with the dashboard bound to Railway's single public `$PORT`. Cutover is sequenced so the new Social agent is fully proven before social capabilities are removed from `kind-generosity`.
+**Architecture:** One engine repo (`hank-hermes-agent`) builds both Hermes services; they are differentiated only by Railway env vars + per-volume config. Each service runs `hermes gateway run` (Telegram + cron) and `hermes dashboard` (the web API Hermes Desktop connects to) together. **Dashboards are Tailscale-private** — each container joins the tailnet via `tailscaled` and the dashboard binds to the node's tailnet IP (no public Railway port). Hermes Desktop reaches each dashboard over the tailnet by MagicDNS name. Cutover is sequenced so the new Social agent is fully proven before social capabilities are removed from `kind-generosity`.
 
-**Tech Stack:** Hermes (Python) engine, Railway (deploy + volumes + env), Railway GraphQL API + CLI, Telegram BotFather, Hermes Desktop, Dropbox (used as a file-transfer bridge between volumes — already integrated).
+**Tech Stack:** Hermes (Python) engine, Railway (deploy + volumes + env), Railway GraphQL API + CLI, Tailscale (userspace networking in-container for private dashboard access), Telegram BotFather, Hermes Desktop, Dropbox (file-transfer bridge between volumes — already integrated).
 
 **Spec:** `docs/superpowers/specs/2026-06-08-split-hermes-agents-design.md`
 
@@ -88,16 +88,25 @@ Expected: `{"ok":true,...,"username":"<your_bot>"}`.
 **Files:**
 - Create: `docker/start-railway.sh`
 - Modify: `railway.toml` (the `startCommand`)
-- Modify: `Dockerfile` (mark the script executable)
+- Modify: `Dockerfile` (install Tailscale; mark the script executable)
 
-- [ ] **Step 1: Write the start script**
+- [ ] **Step 1: Write the start script (Tailscale-private dashboard)**
 
 ```bash
 #!/bin/bash
-# Railway start command: run the gateway (Telegram + cron) and the dashboard
-# (web API for Hermes Desktop) in one container. Only the dashboard needs the
-# public port; the gateway uses outbound Telegram polling + an internal cron loop.
+# Railway start command: bring up Tailscale, then run the gateway (Telegram +
+# cron) and the dashboard (web API for Hermes Desktop) in one container. The
+# dashboard binds to the TAILNET IP only — it is NOT exposed on a public port.
+# The gateway uses outbound Telegram polling + an internal cron loop.
 set -euo pipefail
+
+# Tailscale (userspace networking — no TUN device needed in the container).
+mkdir -p /var/run/tailscale
+tailscaled --tun=userspace-networking --state=/opt/data/tailscaled.state \
+  --socket=/var/run/tailscale/tailscaled.sock &
+tailscale up --authkey="${TS_AUTHKEY}" \
+  --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}"
+TS_IP="$(tailscale ip -4)"
 
 # Gateway in the background (Telegram channels + cron scheduler).
 hermes gateway run &
@@ -107,18 +116,20 @@ GATEWAY_PID=$!
 trap 'kill -TERM "$GATEWAY_PID" 2>/dev/null || true' EXIT
 ( while kill -0 "$GATEWAY_PID" 2>/dev/null; do sleep 5; done; echo "gateway exited"; kill -TERM 1 ) &
 
-# Dashboard in the foreground on Railway's public port (for Hermes Desktop).
-# --insecure is REQUIRED to bind a non-localhost host; without it the server
-# refuses to start (web_server.py:3142). The basic-auth gate
-# (HERMES_DASHBOARD_BASIC_AUTH_*) MUST be set (Task 4) before exposing it.
-exec hermes dashboard --no-open --insecure --host 0.0.0.0 --port "${PORT:-9119}"
+# Dashboard bound to the tailnet IP only (reachable from Hermes Desktop over the
+# tailnet). --insecure is REQUIRED to bind a non-localhost host (web_server.py:3142).
+# basic-auth (HERMES_DASHBOARD_BASIC_AUTH_*) is set as defense-in-depth (Task 4).
+exec hermes dashboard --no-open --insecure --host "$TS_IP" --port 9119
 ```
 
-- [ ] **Step 2: Make it executable in the image**
+- [ ] **Step 2: Install Tailscale + make the script executable in the image**
 
-In `Dockerfile`, near the other `COPY`/`chmod` lines for `docker/`, ensure:
+In `Dockerfile`, install the Tailscale binaries and mark the script executable:
 
 ```dockerfile
+RUN curl -fsSL https://pkgs.tailscale.com/stable/tailscale_latest_amd64.tgz \
+      | tar -xzf - --strip-components=1 -C /usr/local/bin \
+        tailscale_latest_amd64/tailscale tailscale_latest_amd64/tailscaled
 RUN chmod +x /opt/hermes/docker/start-railway.sh
 ```
 
@@ -154,36 +165,43 @@ git commit -m "feat(deploy): run gateway + dashboard together for Hermes Desktop
 
 **Files:** none (deploy + verify).
 
-- [ ] **Step 1: Set dashboard auth + web-dist env on KG**
+- [ ] **Step 1: Set Tailscale + dashboard-auth + web-dist env on KG**
 
-This Hermes version exposes the dashboard with **basic-auth only** (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for dashboard *access* in this codebase (OAuth here is for model providers via `hermes auth add nous`). The `--insecure` flag in the start script binds the non-localhost host; the basic-auth gate is what protects it. The remaining security lever is **network reachability** — see the "Dashboard exposure" decision in the spec/Risks (public-over-HTTPS vs Tailscale-private). Set a strong, unique password regardless.
+Dashboard access is Tailscale-private; basic-auth is defense-in-depth behind the tailnet
+(it's the only dashboard auth this Hermes version has). Generate a **reusable, ephemeral**
+auth key in the Tailscale admin console. **Set the secrets in the Railway dashboard UI**
+(not the CLI, to avoid shell-history exposure):
 
-```bash
-railway link   # kind-generosity → production → hank-hermes-agent
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=<strong-unique-password>"
-railway variables --set "HERMES_DASHBOARD_BASIC_AUTH_SECRET=$(openssl rand -base64 32)"
-railway variables --set "HERMES_WEB_DIST=/opt/hermes/web/dist"
-```
+- `TS_AUTHKEY` = the Tailscale reusable/ephemeral auth key
+- `TS_HOSTNAME` = `hank-web` (the tailnet name Desktop will connect to)
+- `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` = `admin`
+- `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` = a strong, unique password
+- `HERMES_DASHBOARD_BASIC_AUTH_SECRET` = `openssl rand -base64 32` (generate locally; paste in UI)
+- `HERMES_WEB_DIST` = `/opt/hermes/web/dist`
 
 - [ ] **Step 2: Deploy**
 
-```bash
+```powershell
 railway up --service e7d29fc1-9dd0-4715-98af-3b7fe9d5e567
 ```
 Expected: build succeeds, deployment goes `SUCCESS`.
 
-- [ ] **Step 3: Verify the dashboard responds and the gateway still runs**
+- [ ] **Step 3: Verify Tailscale joined, the dashboard is up on the tailnet, and the gateway runs**
+
+```powershell
+railway ssh "tailscale status; tailscale ip -4"
+railway ssh "/opt/hermes/.venv/bin/hermes gateway status; /opt/hermes/.venv/bin/hermes cron status"
+```
+Expected: the node is online in `tailscale status`; a tailnet IP prints; gateway + cron scheduler running. Confirm the node also shows in the Tailscale admin console.
+
+- [ ] **Step 4: Verify reachability over the tailnet (from a tailnet machine)**
+
+From Jonathan's machine (on the same tailnet):
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://hank-hermes-agent-production.up.railway.app/health
-railway ssh "hermes gateway status; hermes cron status"
+curl -s -o /dev/null -w "%{http_code}\n" http://hank-web:9119/health   # MagicDNS name
 ```
-Expected: HTTP `200` from `/health`; gateway status = running; cron scheduler = running.
-
-- [ ] **Step 4: Verify auth gate is engaged**
-
-Open the public URL in a browser → expect a basic-auth prompt; the credentials from Step 1 log you into the dashboard UI.
+Expected: `200` over the tailnet; unreachable from off-tailnet (confirms it's private). The basic-auth prompt appears for the dashboard UI.
 
 - [ ] **Step 5: Commit (state checkpoint, no code change)**
 
@@ -234,10 +252,13 @@ never touch shell history. Then set SOC-specific values (the new bot token from 
 a fresh dashboard password). Enter these **in the UI** too (they're secrets):
 
 - `TELEGRAM_BOT_TOKEN` = the new "Hank Social" token (Task 2)
+- `TS_AUTHKEY` = a fresh Tailscale reusable/ephemeral auth key (its own, not KG's)
+- `TS_HOSTNAME` = `hank-social` (the tailnet name Desktop's Social profile connects to)
 - `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` = `admin`
 - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` = a strong, unique password
 - `HERMES_DASHBOARD_BASIC_AUTH_SECRET` = output of `openssl rand -base64 32` (generate locally; paste into the UI)
 - `HERMES_WEB_DIST` = `/opt/hermes/web/dist`
+- Blog publishing (Social owns it): `AIRTABLE_API_KEY`, `BLOG_API_KEY`, `TELEGRAM_CHAT_ID` (copy from KG via the Raw Editor)
 
 Do NOT set web-only vars (`WEBSITE_GITHUB_TOKEN`, PostHog keys) on SOC.
 
@@ -366,14 +387,20 @@ railway ssh "hermes cron list"
 ```
 Expected: only web/analytics crons remain (PostHog monitor, website loop).
 
-- [ ] **Step 3: Disable social toolsets on KG; keep web + Ace chat**
+- [ ] **Step 3: Disable social skills/toolsets on KG; keep web + Ace chat**
 
-Edit KG `config.yaml`: drop Fastlane/publisher-posting/caption toolsets; keep PostHog tools, the website edit-loop tools, general chat. Then:
+Disable the social skills (and edit the `toolsets:` block in `/opt/data/config.yaml`) so KG
+keeps only web/analytics/ads: drop `hank-x-*`, `hank-ig-tiktok-drafter`, `fastlane-*`,
+`hank-reddit-engagement`, `hank-blog-*`, `blog-publisher-cron`, `hank-hormozi-copywriter`,
+`ad-hoc-post`, `airtable`; keep `posthog-monitor`, the website edit-loop, cold-outbound
+(`hank-cold-email-drafter`, `hank-smartlead-operator`, `hank-where-they-live`). Also disable
+the ~80 irrelevant builtins (mlops/gaming/smart-home/etc.) to cut context bloat.
 
-```bash
-railway ssh "hermes toolsets list"
+```powershell
+railway ssh "/opt/hermes/.venv/bin/hermes skills list"   # confirm only web/ads skills enabled
+railway ssh "grep -A40 '^toolsets:' /opt/data/config.yaml"   # confirm toolset names (no values)
 ```
-Expected: web/analytics toolsets only.
+Expected: social skills/toolsets gone; web/analytics/ads only.
 
 - [ ] **Step 4: Revert the social SOUL/AGENTS patches on KG**
 
@@ -432,17 +459,22 @@ Expected: the PostHog monitor digest job runs and posts to the Ace bot chat.
 
 **Files:** none (local desktop app).
 
-- [ ] **Step 1: Install Hermes Desktop**
+- [ ] **Step 1: Install Hermes Desktop + join the tailnet**
 
 Download for your OS (macOS `.dmg` / Windows `.exe`) from the Nous desktop page and install.
+Install Tailscale on the same machine and sign into the **same tailnet** as the services
+(so `hank-social` / `hank-web` resolve via MagicDNS).
 
-- [ ] **Step 2: Create the Social profile → SOC dashboard**
+- [ ] **Step 2: Create the Social profile → SOC dashboard (over tailnet)**
 
-In Desktop: Profiles → new profile "social" → Settings → Gateway → Remote gateway → URL = `https://<hank-social-public-url>` → sign in with SOC's basic-auth creds (Task 6). Save & reconnect.
+In Desktop: Profiles → new profile "social" → Settings → Gateway → Remote gateway → URL =
+`http://hank-social:9119` (Tailscale MagicDNS name) → sign in with SOC's basic-auth creds
+(Task 6). Save & reconnect.
 
-- [ ] **Step 3: Create the Web profile → KG dashboard**
+- [ ] **Step 3: Create the Web profile → KG dashboard (over tailnet)**
 
-New profile "web" → Remote gateway URL = `https://hank-hermes-agent-production.up.railway.app` → sign in with KG's basic-auth creds (Task 4). Save & reconnect.
+New profile "web" → Remote gateway URL = `http://hank-web:9119` (Tailscale MagicDNS name) →
+sign in with KG's basic-auth creds (Task 4). Save & reconnect.
 
 - [ ] **Step 4: Verify the profile switcher**
 
@@ -486,7 +518,8 @@ git commit -m "docs: record final agent-split placement and soak results"
 
 ## Risks
 
-- **Dashboard exposed publicly with basic-auth:** this Hermes version supports basic-auth only for the dashboard (no OAuth for dashboard access; `--insecure` is required to bind a public host, which "exposes API keys on the network" per its own help text). Over Railway's HTTPS with a strong unique password this is acceptable for a single user, but the dashboard can read API keys and run agent commands — treat it as protected. The real hardening lever is **network reachability**: prefer Tailscale/private networking over public exposure if you want defense-in-depth. **Pending operator decision** (see spec "Dashboard exposure").
+- **Dashboard security = Tailscale-private (decided):** dashboards are not internet-facing; they bind to the tailnet IP and are reachable only over Tailscale, with basic-auth as defense-in-depth. `--insecure` only binds the non-localhost (tailnet) interface — it is not publicly exposed. Risks shift to Tailscale: the `TS_AUTHKEY` is a secret (use reusable+ephemeral keys so dead nodes auto-expire); if `tailscaled` fails to come up, the dashboard is unreachable (the agent/crons still run — gateway is independent).
+- **Tailscale in-container:** uses userspace networking (no TUN). Confirm `tailscale`/`tailscaled` install in the image (Task 3 Step 2) and that the node registers (Task 4 Step 3) before relying on Desktop access.
 - **Cross-volume seed transfer (Task 7):** the Dropbox bridge is the fiddliest step; if it stalls, fall back to recreating social config from defaults + `hermes cron create` and copying `memories/MEMORY.md` manually.
 - **`HERMES_WEB_DIST` path:** if `/opt/hermes/web/dist` is wrong, `hermes dashboard` will try to rebuild at boot (slow). Confirm the path in Task 3 Step 3.
 - **Splitting may not fix a non-load cron bug:** Task 9 / Task 12 cron-tick checks confirm crons actually run post-split before declaring success.

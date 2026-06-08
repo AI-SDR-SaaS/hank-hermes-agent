@@ -73,13 +73,18 @@ Hermes backend and stays managed as it is today.
 ### Both Hermes services — deployment mechanics
 - `hermes dashboard` (web UI/API that Desktop connects to) and `hermes gateway run`
   (Telegram + cron) are **separate processes**. Each service must run **both**.
-- Railway exposes **one public port per service**: bind the **dashboard** to
-  `0.0.0.0:$PORT` (public, for Desktop). The gateway needs no inbound port — Telegram
-  uses outbound polling and the cron scheduler is internal.
-- Change each service's Railway start command from `hermes gateway run` to a wrapper that
-  starts the gateway in the background and runs the dashboard in the foreground on `$PORT`
-  (or the equivalent supported multi-process invocation). Confirm both processes share the
-  same `HERMES_HOME`/profile so the dashboard controls the same agent the gateway runs.
+- **Dashboards are Tailscale-private (operator decision):** neither service exposes a
+  public HTTP port. Each container runs `tailscaled` (userspace networking) and joins the
+  tailnet via a `TS_AUTHKEY`; the dashboard binds to the node's **tailnet IP** (not
+  Railway's public `$PORT`). Hermes Desktop, on Jonathan's machine on the same tailnet,
+  reaches each dashboard by its Tailscale MagicDNS name. The gateway needs no inbound port
+  either (Telegram polls outbound; cron is internal) — so the services need **no public
+  Railway domain** at all.
+- Change each service's Railway start command from `hermes gateway run` to a wrapper that:
+  (1) brings up Tailscale, (2) starts the gateway in the background, (3) runs the dashboard
+  in the foreground bound to the tailnet IP (`--insecure` is still required to bind a
+  non-localhost host). Both processes share the same `HERMES_HOME`/profile so the dashboard
+  controls the same agent the gateway runs. Tailscale must be installed in the Docker image.
 - **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
   access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
   in this codebase (OAuth here is for model providers). Binding a public host requires the
@@ -118,12 +123,12 @@ overload, independent of the split.
 - **Bots:** Web agent keeps the existing Ace bot; Social agent gets a new bot token.
 - **Paid-ads deferred:** kept off this split's critical path; specced separately so the
   split does not block on it.
-- **Dashboard auth:** basic-auth (the only dashboard auth in this Hermes version), with a
-  strong unique password per service.
-- **Dashboard exposure (PENDING operator decision):** either (a) expose each dashboard on
-  its public Railway HTTPS URL behind basic-auth (simple; acceptable single-user), or
-  (b) keep dashboards private and reach them over Tailscale/VPN (more secure, more setup).
-  This is the real security lever now that OAuth isn't an option.
+- **Dashboard exposure:** **Tailscale-private** (operator decision, 2026-06-08). Dashboards
+  are reachable only over the tailnet — no public Railway domain. basic-auth
+  (`HERMES_DASHBOARD_BASIC_AUTH_*`) is still set as defense-in-depth behind the tailnet.
+  Rationale: the dashboard can read API keys and run agent commands, so it should not be
+  internet-facing; OAuth isn't available in this Hermes version, making network isolation
+  the right control.
 
 ## Repository layout & git management
 
