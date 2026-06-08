@@ -72,6 +72,14 @@ Read-only enumeration of the current `hank-hermes-agent` (KG) for classifying in
 - **Social / Content agent:** all platform content — X (drafter/publisher/scheduler/trend-watcher), IG/TikTok + Fastlane (daily-plan, slots A/B), Reddit, **blog** (drafter/restructure/publisher), Hormozi copywriting, ad-hoc-post, higgsfield (image/video), airtable approval hub. Drives the publisher.
 - **Web / Analytics / Ads agent:** PostHog analytics (monitor skill + daily digest cron + posthog MCP), the `ai-assistant-website` code-edit loop (GitHub PR/Vercel/Cubic), and cold outbound/SDR (cold-email-drafter, smartlead-operator + smartlead MCP, where-they-live). Keeps the Ace bot.
 
-### Dependency to verify before cutover
+### Dependency RESOLVED (2026-06-08)
 
-**blog → website publishing:** blog content is authored on the **Social** agent, but the blog likely lives on the website owned by the **Web** agent (`ai-assistant-website`). Check where `blog-publisher-cron` / `blog-publisher-production` actually publishes (cron `Deliver: origin`). If it pushes to the website repo, the Social agent needs `WEBSITE_GITHUB_TOKEN` (or a clean handoff to the Web agent). Resolve in the plan before wiring blog crons onto Social.
+**blog → website publishing is API-based, no cross-agent coupling.** The
+`blog-publisher-cron` skill (`/opt/data/cron/blog-publisher.py`) reads Approved posts from
+**Airtable** and **POSTs them to `meethank.ai/api/blog/posts`** via `BLOG_API_KEY` — it does
+NOT push to the website's GitHub repo. So the **Social** agent owns blog publishing
+end-to-end without `WEBSITE_GITHUB_TOKEN` and without a handoff to the Web agent.
+
+Social agent needs (for blog): `AIRTABLE_API_KEY`, `BLOG_API_KEY`, `TELEGRAM_BOT_TOKEN`
+(the new Hank Social token), `TELEGRAM_CHAT_ID`, plus the cron script
+`/opt/data/cron/blog-publisher.py` copied into its volume (part of the Task 7 seed).

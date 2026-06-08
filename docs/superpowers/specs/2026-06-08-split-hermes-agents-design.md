@@ -100,10 +100,11 @@ Finalized from the live inventory + operator decisions (2026-06-08). See
 
 **Note (broader split than first sketched):** the Social agent owns the *entire content
 motion* (incl. blog + reddit + copy), and the Web agent is analytics + website engineering
-+ cold outbound. **Open dependency:** blog is authored on Social but the blog site is owned
-by the Web agent (`ai-assistant-website`) — confirm where `blog-publisher-cron` publishes
-and grant the Social agent the needed access (or define a Social→Web handoff) before
-wiring blog crons onto Social.
++ cold outbound. **Blog dependency resolved:** blog publishing is API-based —
+`blog-publisher-cron` reads Approved posts from Airtable and POSTs to
+`meethank.ai/api/blog/posts` via `BLOG_API_KEY` (no website-repo push), so the Social agent
+owns it end-to-end with `AIRTABLE_API_KEY` + `BLOG_API_KEY` + `TELEGRAM_*` + the
+`/opt/data/cron/blog-publisher.py` script. No `WEBSITE_GITHUB_TOKEN` or Social→Web handoff.
 
 Also disable the ~80 irrelevant always-on builtin skills per agent (mlops, gaming,
 smart-home, etc.) — a direct reduction of the context bloat that contributed to the
