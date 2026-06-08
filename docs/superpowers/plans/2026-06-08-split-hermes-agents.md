@@ -102,27 +102,34 @@ Expected: `{"ok":true,...,"username":"<your_bot>"}`.
 # NOTE: not `set -e` — Tailscale/dashboard hiccups must not abort the gateway.
 set -uo pipefail
 
-# --- Gateway first (critical): the container's lifetime tracks this process ---
+# --- Gateway first (critical) ---
 hermes gateway run &
 GATEWAY_PID=$!
 
-# --- Tailscale (best-effort, userspace networking — Railway has no TUN device) ---
-# The tailnet IP is virtual in userspace mode and NOT bindable, so the dashboard
-# binds to loopback and `tailscale serve` proxies inbound tailnet traffic to it.
+# Track gateway liveness IMMEDIATELY (before any Tailscale work): if the gateway
+# dies at any point — even while a Tailscale step is blocked — bring the container
+# down so Railway restarts it. `kill -TERM 1` signals tini (PID 1).
+( while kill -0 "$GATEWAY_PID" 2>/dev/null; do sleep 5; done
+  echo "gateway exited — stopping container"; kill -TERM 1 ) &
+
+# --- Tailscale (best-effort, time-bounded so a hang can't mask a dead gateway) ---
+# Userspace networking (Railway has no TUN device). The tailnet IP is virtual and
+# NOT bindable, so the dashboard binds loopback and `tailscale serve` proxies to it.
 mkdir -p /var/run/tailscale
 tailscaled --tun=userspace-networking --state=/opt/data/tailscaled.state \
   --socket=/var/run/tailscale/tailscaled.sock &
 # Wait for the daemon socket before `tailscale up` (fixes the boot race).
 for _ in $(seq 1 30); do tailscale status >/dev/null 2>&1 && break; sleep 1; done
-tailscale up --authkey="${TS_AUTHKEY}" \
+timeout 30 tailscale up --authkey="${TS_AUTHKEY}" \
   --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}" \
-  || echo "WARN: tailscale up failed — dashboard unreachable; gateway continues"
+  || echo "WARN: tailscale up failed/timed out — dashboard unreachable; gateway continues"
 
 # --- Dashboard on loopback (no --insecure needed); Tailscale serves it on the tailnet ---
 hermes dashboard --no-open --host 127.0.0.1 --port 9119 &
-tailscale serve --bg 9119 || echo "WARN: tailscale serve failed — dashboard not on tailnet"
+timeout 15 tailscale serve --bg 9119 || echo "WARN: tailscale serve failed/timed out"
 
-# Container lives as long as the gateway lives; gateway exit → restart by Railway.
+# Foreground: container lives as long as the gateway lives (watcher above is the
+# backstop if anything between here and now had blocked).
 wait "$GATEWAY_PID"
 ```
 
