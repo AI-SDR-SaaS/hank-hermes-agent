@@ -121,8 +121,10 @@ mkdir -p /opt/data/tailscale
 tailscaled --tun=userspace-networking --statedir=/opt/data/tailscale \
   --socket=/opt/data/tailscaled.sock &
 # Wait for the daemon socket before `tailscale up` (fixes the boot race).
-for _ in $(seq 1 30); do tailscale status >/dev/null 2>&1 && break; sleep 1; done
-timeout 30 tailscale up --authkey="${TS_AUTHKEY}" \
+# NOTE: pass the same custom --socket to EVERY tailscale command (the daemon's
+# default socket is /var/run/tailscale, which the non-root hermes user can't create).
+for _ in $(seq 1 30); do tailscale --socket=/opt/data/tailscaled.sock status >/dev/null 2>&1 && break; sleep 1; done
+timeout 30 tailscale --socket=/opt/data/tailscaled.sock up --authkey="${TS_AUTHKEY}" \
   --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}" \
   || echo "WARN: tailscale up failed/timed out — dashboard unreachable; gateway continues"
 
@@ -132,7 +134,7 @@ timeout 30 tailscale up --authkey="${TS_AUTHKEY}" \
 # documented opt-in that accepts a proxied Host. Still private (no public port;
 # serve is the only inbound path).
 hermes dashboard --no-open --insecure --host 0.0.0.0 --port 9119 &
-timeout 15 tailscale serve --bg 9119 || echo "WARN: tailscale serve failed/timed out"
+timeout 15 tailscale --socket=/opt/data/tailscaled.sock serve --bg 9119 || echo "WARN: tailscale serve failed/timed out"
 
 # Foreground: container lives as long as the gateway lives (watcher above is the
 # backstop if anything between here and now had blocked).

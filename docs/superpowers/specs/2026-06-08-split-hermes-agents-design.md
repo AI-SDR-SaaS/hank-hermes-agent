@@ -75,8 +75,9 @@ Hermes backend and stays managed as it is today.
   (Telegram + cron) are **separate processes**. Each service must run **both**.
 - **Dashboards are Tailscale-private (operator decision):** neither service exposes a
   public HTTP port. Each container runs `tailscaled` (userspace networking) and joins the
-  tailnet via a `TS_AUTHKEY`; the dashboard binds to the node's **tailnet IP** (not
-  Railway's public `$PORT`). Hermes Desktop, on Jonathan's machine on the same tailnet,
+  tailnet via a `TS_AUTHKEY`; the dashboard binds **`0.0.0.0:9119`** and is published to the
+  tailnet via `tailscale serve` (the tailnet IP itself is virtual and not bindable — see the
+  start-command note below). Hermes Desktop, on Jonathan's machine on the same tailnet,
   reaches each dashboard by its Tailscale MagicDNS name. The gateway needs no inbound port
   either (Telegram polls outbound; cron is internal) — so the services need **no public
   Railway domain** at all.
@@ -126,7 +127,8 @@ overload, independent of the split.
 
 - **Webhook dropped:** the publisher → Hermes webhook (port 8080) is no longer
   load-bearing (the publisher DMs Telegram directly; the route only logs). Removing it
-  means each service needs only the single public port for the dashboard.
+  means each service exposes **no public port at all** — the dashboard is reached only over
+  the tailnet via `tailscale serve`.
 - **Bots:** Web agent keeps the existing Ace bot; Social agent gets a new bot token.
 - **Paid-ads deferred:** kept off this split's critical path; specced separately so the
   split does not block on it.
