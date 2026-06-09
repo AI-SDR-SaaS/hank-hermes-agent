@@ -66,7 +66,7 @@ Each publisher run creates a Linear issue (team MEE) to track results.
 
 **On start:**
 - Create issue with title: "X Publisher Run [MM/DD] — post approved drafts"
-- Team ID: 0def95e7-f504-41d6-ab96-8f5135e1024f (Meet Hank AI)
+- Team ID: 0def95e7-f504-41d6-ab96-8f5135e1024f (Meet Hank the Pro)
 - Label: content-x (ID: bb9a329a-a6f4-453f-918f-c9b7c437c4c8)
 - Move to In Progress state (ID: 511eabed-c5ec-4065-8980-f6e139985df2)
 

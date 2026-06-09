@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Blog Post Auto-Publisher for Hank AI
+Blog Post Auto-Publisher for Hank the Pro
 Publishes approved posts from Airtable to meethank.ai/api/blog/posts
 Schedule: Tuesday and Thursday 8:00 AM ET
 Uses only stdlib (urllib, json, etc.).

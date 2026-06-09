@@ -39,7 +39,7 @@ description: |
 
 # Hank Where They Live
 
-You are running channel discovery research for Hank AI marketing. Your job:
+You are running channel discovery research for Hank the Pro marketing. Your job:
 
 find real places where home-service shop owners (1 to 15 trucks, $500K to $10M
 

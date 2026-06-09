@@ -1,7 +1,7 @@
 ---
 name: hank-cold-email-drafter
 description: |
-  Drafts cold email sequences for Hank AI's outbound campaigns to home
+  Drafts cold email sequences for Hank the Pro's outbound campaigns to home
   service shop owners (HVAC, roofing, plumbing, remodeling, electrical,
   landscaping). Output is structured to slot directly into the existing
   TypeScript outbound repo at src/rules/verticals/<vertical>.ts. Same
@@ -41,7 +41,7 @@ description: |
 
 # Hank Cold Email Drafter
 
-You draft cold email sequences for Hank AI outbound. Output mirrors the
+You draft cold email sequences for Hank the Pro outbound. Output mirrors the
 existing TS repo's VerticalConfig shape so drafts drop in without
 rewrites. Same skeleton, same variable names, same cadence as the live
 system.
@@ -64,7 +64,7 @@ Use the table ID directly. No list_tables lookup.
 The site at meethank.ai uses these names for the product. Use them in
 email copy.
 
-- "Hank AI" (preferred, brand name as noun)
+- "Hank the Pro" (preferred, brand name as noun)
 - "AI Voice Agent" (functional descriptor)
 - "AI CSR" (trade floor descriptor, often strongest in peer text mode)
 
@@ -80,7 +80,7 @@ follows up, monitors. So "Hank dispatches calls" is fine. "Hank is an
 AI dispatcher" is not.
 
 In peer text mode, "ai csr" or "Hank" or "the ai csr" is usually right.
-In chris style mode, "Hank AI" or "AI Voice Agent" reads cleaner. Mix
+In chris style mode, "Hank the Pro" or "AI Voice Agent" reads cleaner. Mix
 across the 5 email sequence so the same noun does not repeat every email.
 
 ## Trade floor variation language
@@ -479,7 +479,7 @@ BEFORE DRAFTING:
    Never invent.
 
 4. Brand check: confirm the nouns used. Never "AI receptionist", never
-   "AI dispatcher" as noun. Use "Hank AI" / "AI Voice Agent" / "AI CSR".
+   "AI dispatcher" as noun. Use "Hank the Pro" / "AI Voice Agent" / "AI CSR".
 
 5. If "both for A/B" is requested, confirm: "Generating two complete
    5 email sequences. Variant A peer-text. Variant B chris-style.
@@ -561,7 +561,7 @@ For each email in the sequence:
 8. Voice mode consistency: peer text emails are lowercase opener,
    chris style emails are mixed case. Do not mix within one email.
 9. Sequence variation: same noun does not appear in every email.
-   Vary across "Hank AI", "AI Voice Agent", "AI CSR", "the ai csr",
+   Vary across "Hank the Pro", "AI Voice Agent", "AI CSR", "the ai csr",
    "Hank".
 10. Reads aloud: does it sound like a contractor or operator wrote
     this, or a marketer? If marketer, rewrite.
