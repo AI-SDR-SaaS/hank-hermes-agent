@@ -95,8 +95,9 @@ Hermes backend and stays managed as it is today.
   must be installed in the Docker image.
 - **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
   access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
-  in this codebase (OAuth here is for model providers). Binding a public host requires the
-  `--insecure` flag. The remaining security lever is **network reachability** — see the
+  in this codebase (OAuth here is for model providers). Binding `0.0.0.0` (needed so
+  `tailscale serve` can proxy to it — not for public exposure) requires the `--insecure`
+  flag. The primary security control is **network isolation** (Tailscale-private) — see the
   "Dashboard exposure" decision below.
 
 ## Workload / cron assignment
@@ -199,14 +200,17 @@ required for the initial split.
 
 ## Risks & mitigations
 
-- **Two inbound ports wanted on one service** — avoided by dropping the webhook; only the
-  dashboard is exposed.
+- **No public ports** — the webhook is dropped and the dashboard is tailnet-only, so neither
+  service exposes a public Railway port.
 - **Bot conflict** — each agent gets a distinct Telegram bot token.
 - **Social regression during cutover** — the new social service is fully proven (step 2)
   *before* social capabilities are removed from `kind-generosity` (step 3), so there is no
   window where social work has no home.
-- **Dashboard exposed publicly** — mitigated by per-service OAuth auth; never expose an
-  unauthenticated dashboard.
+- **Dashboard security** — the dashboard binds `0.0.0.0` (so `tailscale serve` can proxy to
+  it) but is **never internet-facing**: Railway maps no public port and the tailnet is the
+  only inbound path. basic-auth (`HERMES_DASHBOARD_BASIC_AUTH_*`) is layered on as
+  defense-in-depth. (No dashboard OAuth exists in this Hermes version — network isolation is
+  the primary control.) `TS_AUTHKEY` is a secret; use reusable+ephemeral keys.
 - **Splitting may not fix a cron bug that is not load-related** — step 1's enumeration and
   step 5's observation confirm the failures were contention before we declare success.
 
