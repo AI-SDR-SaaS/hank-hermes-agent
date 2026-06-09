@@ -27,10 +27,14 @@ GATEWAY_PID=$!
 # Until TS_AUTHKEY is set, the container simply runs the gateway (same as before),
 # so this change is safe to deploy before the operator provisions Tailscale.
 if [ -n "${TS_AUTHKEY:-}" ] && command -v tailscaled >/dev/null 2>&1; then
-  # Userspace networking: Railway containers have no TUN device. State + socket
-  # live on the volume so the non-root hermes user can write them.
+  # Userspace networking: Railway containers have no TUN device. Use --statedir
+  # (a directory, not --state=<file>) so Tailscale has a writable var root for
+  # HTTPS certs (`tailscale serve` needs it; --state alone gives "no
+  # TailscaleVarRoot"). On the volume so the non-root hermes user can write it
+  # and the node identity + cert persist across redeploys.
+  mkdir -p /opt/data/tailscale
   tailscaled --tun=userspace-networking \
-    --state=/opt/data/tailscaled.state --socket="$TS_SOCK" &
+    --statedir=/opt/data/tailscale --socket="$TS_SOCK" &
 
   # Wait for the daemon socket before `tailscale up` (avoids a boot race).
   for _ in $(seq 1 30); do
@@ -42,10 +46,12 @@ if [ -n "${TS_AUTHKEY:-}" ] && command -v tailscaled >/dev/null 2>&1; then
     --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}" \
     || echo "WARN: tailscale up failed/timed out — dashboard unreachable; gateway continues"
 
-  # The tailnet IP is virtual in userspace mode and NOT bindable, so the dashboard
-  # binds loopback and `tailscale serve` proxies inbound tailnet traffic to it.
-  # HERMES_WEB_DIST is already baked into the image (/opt/hermes/hermes_cli/web_dist).
-  "$HERMES_BIN" dashboard --no-open --host 127.0.0.1 --port 9119 &
+  # Bind 0.0.0.0 (--insecure), NOT loopback: the dashboard's Host-header guard
+  # only accepts the bound host, and `tailscale serve` forwards the original Host
+  # (the MagicDNS name) — binding 0.0.0.0 is the documented opt-in that accepts
+  # a proxied Host. Still private: Railway maps no public port and `tailscale
+  # serve` is the only inbound path. HERMES_WEB_DIST is baked into the image.
+  "$HERMES_BIN" dashboard --no-open --insecure --host 0.0.0.0 --port 9119 &
 
   timeout 15 tailscale --socket="$TS_SOCK" serve --bg 9119 \
     || echo "WARN: tailscale serve failed/timed out — dashboard not on tailnet"

@@ -75,8 +75,9 @@ Hermes backend and stays managed as it is today.
   (Telegram + cron) are **separate processes**. Each service must run **both**.
 - **Dashboards are Tailscale-private (operator decision):** neither service exposes a
   public HTTP port. Each container runs `tailscaled` (userspace networking) and joins the
-  tailnet via a `TS_AUTHKEY`; the dashboard binds to the node's **tailnet IP** (not
-  Railway's public `$PORT`). Hermes Desktop, on Jonathan's machine on the same tailnet,
+  tailnet via a `TS_AUTHKEY`; the dashboard binds **`0.0.0.0:9119`** and is published to the
+  tailnet via `tailscale serve` (the tailnet IP itself is virtual and not bindable — see the
+  start-command note below). Hermes Desktop, on Jonathan's machine on the same tailnet,
   reaches each dashboard by its Tailscale MagicDNS name. The gateway needs no inbound port
   either (Telegram polls outbound; cron is internal) — so the services need **no public
   Railway domain** at all.
@@ -84,15 +85,19 @@ Hermes backend and stays managed as it is today.
   (1) starts the **gateway first** (the critical path) as the process the container's
   lifetime tracks; (2) brings up Tailscale **best-effort** (waits for the daemon socket
   before `tailscale up`; a Tailscale failure logs a warning but does NOT abort the gateway);
-  (3) runs the dashboard on **`127.0.0.1:9119`** and exposes it on the tailnet via
-  `tailscale serve`. In userspace-networking mode the tailnet IP is virtual and not
-  bindable, so the dashboard binds loopback (no `--insecure` needed) and Tailscale proxies
-  inbound tailnet traffic to it. Both processes share the same `HERMES_HOME`/profile.
-  Tailscale must be installed in the Docker image.
+  (3) runs the dashboard on **`0.0.0.0:9119`** (`--insecure`) and exposes it on the tailnet
+  via `tailscale serve`. The tailnet IP is virtual in userspace mode (not bindable), and the
+  dashboard's Host-header guard only accepts the bound host while `tailscale serve` forwards
+  the MagicDNS Host — so binding `0.0.0.0` (the documented opt-in that accepts a proxied
+  Host) is required; it stays private because Railway maps no public port and serve is the
+  only inbound path. `tailscaled` uses `--statedir` (not `--state=<file>`) so it has a var
+  root for the HTTPS cert. Both processes share the same `HERMES_HOME`/profile. Tailscale
+  must be installed in the Docker image.
 - **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
   access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
-  in this codebase (OAuth here is for model providers). Binding a public host requires the
-  `--insecure` flag. The remaining security lever is **network reachability** — see the
+  in this codebase (OAuth here is for model providers). Binding `0.0.0.0` (needed so
+  `tailscale serve` can proxy to it — not for public exposure) requires the `--insecure`
+  flag. The primary security control is **network isolation** (Tailscale-private) — see the
   "Dashboard exposure" decision below.
 
 ## Workload / cron assignment
@@ -123,7 +128,8 @@ overload, independent of the split.
 
 - **Webhook dropped:** the publisher → Hermes webhook (port 8080) is no longer
   load-bearing (the publisher DMs Telegram directly; the route only logs). Removing it
-  means each service needs only the single public port for the dashboard.
+  means each service exposes **no public port at all** — the dashboard is reached only over
+  the tailnet via `tailscale serve`.
 - **Bots:** Web agent keeps the existing Ace bot; Social agent gets a new bot token.
 - **Paid-ads deferred:** kept off this split's critical path; specced separately so the
   split does not block on it.
@@ -194,14 +200,17 @@ required for the initial split.
 
 ## Risks & mitigations
 
-- **Two inbound ports wanted on one service** — avoided by dropping the webhook; only the
-  dashboard is exposed.
+- **No public ports** — the webhook is dropped and the dashboard is tailnet-only, so neither
+  service exposes a public Railway port.
 - **Bot conflict** — each agent gets a distinct Telegram bot token.
 - **Social regression during cutover** — the new social service is fully proven (step 2)
   *before* social capabilities are removed from `kind-generosity` (step 3), so there is no
   window where social work has no home.
-- **Dashboard exposed publicly** — mitigated by per-service OAuth auth; never expose an
-  unauthenticated dashboard.
+- **Dashboard security** — the dashboard binds `0.0.0.0` (so `tailscale serve` can proxy to
+  it) but is **never internet-facing**: Railway maps no public port and the tailnet is the
+  only inbound path. basic-auth (`HERMES_DASHBOARD_BASIC_AUTH_*`) is layered on as
+  defense-in-depth. (No dashboard OAuth exists in this Hermes version — network isolation is
+  the primary control.) `TS_AUTHKEY` is a secret; use reusable+ephemeral keys.
 - **Splitting may not fix a cron bug that is not load-related** — step 1's enumeration and
   step 5's observation confirm the failures were contention before we declare success.
 
