@@ -1,5 +1,5 @@
 ---
-name: airtable
+name: airtable-records
 description: Browse Airtable bases and tables, inspect records, and perform available Airtable actions such as creating records, comments, fields, or tables when supported by the connected tool set. Use when a user wants practical Airtable help from chat. Treat the connected tool catalog and current connection state as the source of truth, prefer inspection before writes, and do not invent unsupported capabilities.
 ---
 
