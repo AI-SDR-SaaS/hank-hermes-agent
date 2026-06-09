@@ -1,8 +1,8 @@
 ---
 name: hank-x-drafter
-description: Draft tight X (Twitter) posts for Hank AI. Enforce 220-char hard limit, lowercase fragments, stripped narration. Use structural templates, verify char counts, batch-update to Airtable Drafts table.
+description: Draft tight X (Twitter) posts for Hank the Pro. Enforce 220-char hard limit, lowercase fragments, stripped narration. Use structural templates, verify char counts, batch-update to Airtable Drafts table.
 version: 1.1.0
-author: Ace (CMO, Hank AI)
+author: Ace (CMO, Hank the Pro)
 trigger: |
   When asked to draft X posts (especially for Hank marketing, founder voice, or industry observations), or when Jonathan asks to "write for X" / "tweet this" / "draft 3 X variations."
 ---

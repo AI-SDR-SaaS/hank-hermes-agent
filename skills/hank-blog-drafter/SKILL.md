@@ -301,7 +301,7 @@ These go into the page markup, not the Airtable record body:
 **JSON-LD schema (three required schemas):**
 
 1. Article schema, headline, author (Person), datePublished, dateModified, image
-2. Person schema, author name (Jonathan Sherman), url (meethank.ai/team/jonathan-sherman), jobTitle (Founder, Hank AI), image
+2. Person schema, author name (Jonathan Sherman), url (meethank.ai/team/jonathan-sherman), jobTitle (Founder, Hank the Pro), image
 3. FAQPage schema, each `**Question?**` paragraph in FAQ section becomes a question object with the next paragraph as the answer
 
 Jonathan's dev team adds these. Mention in your Airtable comment but don't code it.
@@ -570,7 +570,7 @@ After update confirms:
 | CRITICAL | Invalid Pillar field | Pillar = "QUALIFY" | Pillar = "Comparison" or "Industry" (must be exact value) |
 | CRITICAL | Invalid Format field | Format = "Comparison Post" | Format = "Comparison" (exact value, no extra words) |
 | HIGH | Hyphens in compound phrases | "all-day model" or "after-hours calls" or "$500-$1,500" | "all day model" or "after hours calls" or "$500 to $1,500" |
-| HIGH | Byline in body | "By Jonathan S\nFounder of Hank AI..." (first line of body) | Remove entirely. Byline goes in frontmatter only. |
+| HIGH | Byline in body | "By Jonathan S\nFounder of Hank the Pro..." (first line of body) | Remove entirely. Byline goes in frontmatter only. |
 | HIGH | Section titles not bold | "The real call loss number" (plain text) | "**The real call loss number**" (bold) |
 | MEDIUM | Bulleted Key Takeaways | Bare bullets (not in component) | Wrap in `<Callout title="Key Takeaways">` ... `</Callout>` |
 | MEDIUM | Forbidden CTA URLs | href="/demo" or href="/calculator" | Replace with: /pricing#plans, /contact, /how-it-works |
@@ -581,7 +581,7 @@ After update confirms:
 | CRITICAL | Invalid Pillar | Pillar = BOOK | Change to: Setup, Strategy, Industry, Comparison, Pricing, or Product |
 | CRITICAL | Invalid Format | Format = Comparison Post | Change to: Comparison, Real-Data, or Operator-Voice |
 | HIGH | Hyphens throughout | after-hours, 5-truck, $500-$1,500 | Replace with: after hours, 5 truck, $500 to $1,500 |
-| HIGH | Byline in body | By Jonathan S Founder of Hank AI... | Remove. Byline in frontmatter only. |
+| HIGH | Byline in body | By Jonathan S Founder of Hank the Pro... | Remove. Byline in frontmatter only. |
 | HIGH | Plain section titles | What Goodcall Does Well (not bold) | Wrap in **bold**: **What Goodcall Does Well** |
 | MEDIUM | Bulleted Key Takeaways | Key Takeaways (plain bullets) | Wrap in `<Callout title="Key Takeaways">` MDX component |
 | MEDIUM | Forbidden CTA | href="/demo" | Change to: /pricing#plans, /contact, /how-it-works |

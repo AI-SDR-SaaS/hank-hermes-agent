@@ -72,7 +72,7 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
      Format each line as `A1: <first line of variant 1>` etc. for slot A, `B1:`
      etc. for slot B.
    - Tell Jonathan he can reply with the label (e.g. `A2`) or with edits
-     (e.g. `A2 but change "Hank AI" to "Hank the Pro"`).
+     (e.g. `A2 but change "Hank the Pro" to "Hank the Pro"`).
    - On a single-slot day, send ONLY the slot A message and mention in the
      confirmation that slot B will skip today.
 
@@ -85,7 +85,7 @@ ET and `fastlane-publish-slot-b` at 18:00 ET) drain the plan via
 
 ## How Jonathan's taps get resolved (NOT part of this cron)
 
-When Jonathan replies in Telegram with something like `A2` or `B1 with Hank AI -> Hank the Pro`, the chat-mode Ace agent (different session) handles it by calling:
+When Jonathan replies in Telegram with something like `A2` or `B1 with Hank the Pro -> Hank the Pro`, the chat-mode Ace agent (different session) handles it by calling:
 
 ```
 fastlane_resolve_pick({

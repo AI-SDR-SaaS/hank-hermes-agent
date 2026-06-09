@@ -205,7 +205,7 @@ All structural requirements met:
 
 **When to use:** AIRTABLE_API_KEY is unavailable or uncertain in session (Telegram, delegated tasks). Jonathan approves fixes before batch update, or fixes are staged for later batch processing.
 
-**Trigger:** `Fix blog post rec2bkPwluMDwFrIS (Hank vs. Goodcall). Fetch, audit, fix hyphens + rename Hank AI to Hank the Pro, validate, and return results. Do NOT update Airtable yet (batch update later).`
+**Trigger:** `Fix blog post rec2bkPwluMDwFrIS (Hank vs. Goodcall). Fetch, audit, fix hyphens + rename Hank the Pro to Hank the Pro, validate, and return results. Do NOT update Airtable yet (batch update later).`
 
 **Pattern:**
 
@@ -251,7 +251,7 @@ violations = has_hyphens(body)
 
 # 3. Fix violations inline
 fixed_body = body.replace("after-hours", "after hours")
-fixed_body = fixed_body.replace("Hank AI", "Hank the Pro")
+fixed_body = fixed_body.replace("Hank the Pro", "Hank the Pro")
 
 # 4. Validate fixed version (re-run local validators or import blog-publisher)
 exec(open('/opt/data/cron/blog-publisher.py').read(), globals())
@@ -370,7 +370,7 @@ Airtable links: rec2..., rec3..., rec4..., ...
 | Hyphens in ranges | `$500-$1,500` | `$500 to $1,500` | HIGH |
 | Hyphens in phrases | `after-hours` | `after hours` | HIGH |
 | Forbidden CTA URL | `href="/demo"` | `href="/how-it-works"` | CRITICAL |
-| Byline in body | `By Jonathan S\nFounder of Hank AI...` (first line) | (Remove. Byline in frontmatter only.) | HIGH |
+| Byline in body | `By Jonathan S\nFounder of Hank the Pro...` (first line) | (Remove. Byline in frontmatter only.) | HIGH |
 | Section not bold | `The Real Cost` (plain) | `**The Real Cost**` | HIGH |
 | Invalid Pillar | `Pillar = "BOOK"` | `Pillar = "Setup"` (or Comparison, Strategy, etc.) | CRITICAL |
 | Invalid Format | `Format = "Tech Post"` | `Format = "Operator-Voice"` | CRITICAL |

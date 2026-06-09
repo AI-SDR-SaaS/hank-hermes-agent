@@ -240,7 +240,7 @@ For every tier, build the stack:
 
 | Component | Standalone value |
 |---|---|
-| Hank AI front desk, answers every call under 5s, 24/7 | $549/mo |
+| Hank the Pro front desk, answers every call under 5s, 24/7 | $549/mo |
 | BONUS: 15-minute setup (vs ServiceTitan's $5K to $50K implementation) | $5,000 |
 | BONUS: Multi-CRM integration (5 CRMs supported) | $2,000 |
 | BONUS: Trade-specific emergency triage | $1,000 |
@@ -308,7 +308,7 @@ Worth a 10-minute call?
 [Calendar link]
 
 [Name]
-Hank AI · meethank.ai
+Hank the Pro · meethank.ai
 
 ### Ad copy (Meta / Google)
 
