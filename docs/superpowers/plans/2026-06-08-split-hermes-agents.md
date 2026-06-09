@@ -113,19 +113,25 @@ GATEWAY_PID=$!
   echo "gateway exited — stopping container"; kill -TERM 1 ) &
 
 # --- Tailscale (best-effort, time-bounded so a hang can't mask a dead gateway) ---
-# Userspace networking (Railway has no TUN device). The tailnet IP is virtual and
-# NOT bindable, so the dashboard binds loopback and `tailscale serve` proxies to it.
-mkdir -p /var/run/tailscale
-tailscaled --tun=userspace-networking --state=/opt/data/tailscaled.state \
-  --socket=/var/run/tailscale/tailscaled.sock &
+# Userspace networking (Railway has no TUN device). Use --statedir (a directory)
+# so Tailscale has a writable var root for HTTPS certs that `tailscale serve`
+# needs (--state=<file> alone yields "no TailscaleVarRoot"). On the volume so the
+# node identity + cert persist across redeploys.
+mkdir -p /opt/data/tailscale
+tailscaled --tun=userspace-networking --statedir=/opt/data/tailscale \
+  --socket=/opt/data/tailscaled.sock &
 # Wait for the daemon socket before `tailscale up` (fixes the boot race).
 for _ in $(seq 1 30); do tailscale status >/dev/null 2>&1 && break; sleep 1; done
 timeout 30 tailscale up --authkey="${TS_AUTHKEY}" \
   --hostname="${TS_HOSTNAME:-hank-${RAILWAY_SERVICE_NAME:-hermes}}" \
   || echo "WARN: tailscale up failed/timed out — dashboard unreachable; gateway continues"
 
-# --- Dashboard on loopback (no --insecure needed); Tailscale serves it on the tailnet ---
-hermes dashboard --no-open --host 127.0.0.1 --port 9119 &
+# --- Dashboard on 0.0.0.0 (--insecure); Tailscale serves it on the tailnet ---
+# Bind 0.0.0.0 not loopback: the dashboard's Host-header guard only accepts the
+# bound host, and `tailscale serve` forwards the MagicDNS Host — 0.0.0.0 is the
+# documented opt-in that accepts a proxied Host. Still private (no public port;
+# serve is the only inbound path).
+hermes dashboard --no-open --insecure --host 0.0.0.0 --port 9119 &
 timeout 15 tailscale serve --bg 9119 || echo "WARN: tailscale serve failed/timed out"
 
 # Foreground: container lives as long as the gateway lives (watcher above is the

@@ -84,11 +84,14 @@ Hermes backend and stays managed as it is today.
   (1) starts the **gateway first** (the critical path) as the process the container's
   lifetime tracks; (2) brings up Tailscale **best-effort** (waits for the daemon socket
   before `tailscale up`; a Tailscale failure logs a warning but does NOT abort the gateway);
-  (3) runs the dashboard on **`127.0.0.1:9119`** and exposes it on the tailnet via
-  `tailscale serve`. In userspace-networking mode the tailnet IP is virtual and not
-  bindable, so the dashboard binds loopback (no `--insecure` needed) and Tailscale proxies
-  inbound tailnet traffic to it. Both processes share the same `HERMES_HOME`/profile.
-  Tailscale must be installed in the Docker image.
+  (3) runs the dashboard on **`0.0.0.0:9119`** (`--insecure`) and exposes it on the tailnet
+  via `tailscale serve`. The tailnet IP is virtual in userspace mode (not bindable), and the
+  dashboard's Host-header guard only accepts the bound host while `tailscale serve` forwards
+  the MagicDNS Host — so binding `0.0.0.0` (the documented opt-in that accepts a proxied
+  Host) is required; it stays private because Railway maps no public port and serve is the
+  only inbound path. `tailscaled` uses `--statedir` (not `--state=<file>`) so it has a var
+  root for the HTTPS cert. Both processes share the same `HERMES_HOME`/profile. Tailscale
+  must be installed in the Docker image.
 - **Dashboard auth:** this Hermes version supports **basic-auth only** for dashboard
   access (`HERMES_DASHBOARD_BASIC_AUTH_*`); there is no Nous-Portal OAuth for the dashboard
   in this codebase (OAuth here is for model providers). Binding a public host requires the
