@@ -65,3 +65,35 @@ def test_schedule_draft_sends_when_epoch():
         json.loads(xgrowth_tools._schedule_draft({"draft_id": "d1", "when_epoch": 1812345678}))
     assert m.call_args.args[:2] == ("POST", "/api/queue/d1/schedule")
     assert m.call_args.kwargs["json"] == {"when_epoch": 1812345678}
+
+
+def test_post_defaults_to_dry_run_true():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._post({"draft_id": "d1"}))
+    body = m.call_args.kwargs["json"]
+    assert body["dry_run"] is True   # live-by-default API made safe at the tool boundary
+
+
+def test_post_live_only_when_explicit_false():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._post({"draft_id": "d1", "dry_run": False}))
+    assert m.call_args.kwargs["json"]["dry_run"] is False
+
+
+def test_post_due_defaults_dry_run_true():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"posted": 0}) as m:
+        json.loads(xgrowth_tools._post_due({}))
+    assert m.call_args.kwargs["json"]["dry_run"] is True
+
+
+def test_takedown_path():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._takedown({"draft_id": "d9"}))
+    assert m.call_args.args[:2] == ("POST", "/api/post/d9/takedown")
+
+
+def test_reporting_summary_passes_days_param():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"summary": {}}) as m:
+        json.loads(xgrowth_tools._reporting_summary({"days": 7}))
+    assert m.call_args.args[:2] == ("GET", "/api/reporting/summary")
+    assert m.call_args.kwargs["params"] == {"days": 7}

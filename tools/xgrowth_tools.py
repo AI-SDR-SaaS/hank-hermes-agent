@@ -242,3 +242,116 @@ _register(REJECT_SCHEMA, _reject_draft)
 _register(SCHEDULE_DRAFT_SCHEMA, _schedule_draft)
 _register(UNSCHEDULE_SCHEMA, _unschedule_draft)
 _register(DELETE_SCHEMA, _delete_draft)
+
+# ----- Post (scope: post) -----
+
+GET_SCHEDULE_SCHEMA = {
+    "name": "xgrowth_get_schedule",
+    "description": "List currently scheduled posts and their times.",
+    "parameters": {"type": "object", "properties": {}},
+}
+
+def _get_schedule(args: dict, **_kw: Any) -> str:
+    return _call("GET", "/api/schedule")
+
+POST_SCHEMA = {
+    "name": "xgrowth_post",
+    "description": (
+        "Publish a draft to X. SAFETY: dry_run defaults to TRUE (simulate only). "
+        "Posts a REAL tweet to @jonathan_sherm ONLY when dry_run is explicitly false, "
+        "which requires Jonathan's explicit go-ahead. Cadence guard (8/day, 45min apart) "
+        "returns 409; set force=true only when Jonathan intends to override."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "draft_id": {"type": "string"},
+            "dry_run": {"type": "boolean", "description": "Default true. Set false ONLY on explicit instruction to post live."},
+            "force": {"type": "boolean", "description": "Override the cadence guard (409). Default false."},
+        },
+        "required": ["draft_id"],
+    },
+}
+
+def _post(args: dict, **_kw: Any) -> str:
+    err = _require(args, "draft_id")
+    if err:
+        return err
+    payload = {
+        "draft_id": args["draft_id"],
+        "dry_run": bool(args.get("dry_run", True)),   # live-by-default API -> dry-run-by-default tool
+        "force": bool(args.get("force", False)),
+    }
+    return _call("POST", "/api/post", json=payload)
+
+POST_DUE_SCHEMA = {
+    "name": "xgrowth_post_due",
+    "description": "Publish any scheduled drafts whose time is due (periodic tick). dry_run defaults to TRUE; set false only on explicit instruction.",
+    "parameters": {"type": "object", "properties": {"dry_run": {"type": "boolean"}}},
+}
+
+def _post_due(args: dict, **_kw: Any) -> str:
+    return _call("POST", "/api/post-due", json={"dry_run": bool(args.get("dry_run", True))})
+
+TAKEDOWN_SCHEMA = {
+    "name": "xgrowth_takedown",
+    "description": "Retract a bad LIVE post: deletes the tweet(s) from X for this draft. (xgrowth_delete_draft only removes the record.)",
+    "parameters": {"type": "object", "properties": {"draft_id": {"type": "string"}}, "required": ["draft_id"]},
+}
+
+def _takedown(args: dict, **_kw: Any) -> str:
+    err = _require(args, "draft_id")
+    if err:
+        return err
+    return _call("POST", f"/api/post/{args['draft_id']}/takedown")
+
+# ----- Reporting (scope: reporting) -----
+
+REPORTING_SUMMARY_SCHEMA = {
+    "name": "xgrowth_reporting_summary",
+    "description": "Analytics summary (engagement, follower growth) over the last N days (default platform setting).",
+    "parameters": {"type": "object", "properties": {"days": {"type": "integer"}}},
+}
+
+def _reporting_summary(args: dict, **_kw: Any) -> str:
+    params = {"days": args["days"]} if args.get("days") is not None else None
+    return _call("GET", "/api/reporting/summary", params=params)
+
+REPORTING_DRIFT_SCHEMA = {
+    "name": "xgrowth_reporting_drift",
+    "description": "Content drift analysis for a niche (how output is trending vs the target voice).",
+    "parameters": {"type": "object", "properties": {"niche": {"type": "string"}}, "required": ["niche"]},
+}
+
+def _reporting_drift(args: dict, **_kw: Any) -> str:
+    err = _require(args, "niche")
+    if err:
+        return err
+    return _call("GET", "/api/reporting/drift", params={"niche": args["niche"]})
+
+REPORTING_SYNC_SCHEMA = {
+    "name": "xgrowth_reporting_sync",
+    "description": "Pull fresh post metrics from X and record a follower snapshot. Run before reading summaries.",
+    "parameters": {"type": "object", "properties": {}},
+}
+
+def _reporting_sync(args: dict, **_kw: Any) -> str:
+    return _call("POST", "/api/reporting/sync")
+
+INSIGHTS_SCHEMA = {
+    "name": "xgrowth_insights",
+    "description": "Compute insights about what is driving engagement (feeds back into future generation).",
+    "parameters": {"type": "object", "properties": {}},
+}
+
+def _insights(args: dict, **_kw: Any) -> str:
+    return _call("POST", "/api/insights")
+
+_register(GET_SCHEDULE_SCHEMA, _get_schedule)
+_register(POST_SCHEMA, _post)
+_register(POST_DUE_SCHEMA, _post_due)
+_register(TAKEDOWN_SCHEMA, _takedown)
+_register(REPORTING_SUMMARY_SCHEMA, _reporting_summary)
+_register(REPORTING_DRIFT_SCHEMA, _reporting_drift)
+_register(REPORTING_SYNC_SCHEMA, _reporting_sync)
+_register(INSIGHTS_SCHEMA, _insights)
