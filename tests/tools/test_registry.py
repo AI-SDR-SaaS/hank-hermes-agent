@@ -311,6 +311,7 @@ class TestBuiltinDiscovery:
             "tools.posthog_tools",
             "tools.process_registry",
             "tools.publisher_tools",
+            "tools.xgrowth_tools",
             "tools.rl_training_tool",
             "tools.send_message_tool",
             "tools.session_search_tool",
