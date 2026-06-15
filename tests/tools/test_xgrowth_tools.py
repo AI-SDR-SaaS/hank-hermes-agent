@@ -97,3 +97,32 @@ def test_reporting_summary_passes_days_param():
         json.loads(xgrowth_tools._reporting_summary({"days": 7}))
     assert m.call_args.args[:2] == ("GET", "/api/reporting/summary")
     assert m.call_args.kwargs["params"] == {"days": 7}
+
+
+ALL_XGROWTH_TOOLS = [
+    "xgrowth_radar_feed", "xgrowth_radar_refresh",
+    "xgrowth_generate", "xgrowth_score", "xgrowth_hooks", "xgrowth_list_niches",
+    "xgrowth_list_queue", "xgrowth_edit_draft", "xgrowth_approve_draft",
+    "xgrowth_reject_draft", "xgrowth_schedule_draft", "xgrowth_unschedule_draft",
+    "xgrowth_delete_draft",
+    "xgrowth_get_schedule", "xgrowth_post", "xgrowth_post_due", "xgrowth_takedown",
+    "xgrowth_reporting_summary", "xgrowth_reporting_drift", "xgrowth_reporting_sync",
+    "xgrowth_insights",
+]
+
+
+@pytest.mark.parametrize("name", ALL_XGROWTH_TOOLS)
+def test_tool_registered_under_xgrowth_toolset(name):
+    from tools.registry import registry
+    entry = registry.get_entry(name)
+    assert entry is not None, f"{name} not registered"
+    assert entry.toolset == "xgrowth"
+    assert entry.schema.get("name") == name
+    assert entry.schema.get("parameters", {}).get("type") == "object"
+
+
+def test_xgrowth_toolset_resolves():
+    from toolsets import resolve_toolset
+    tools = set(resolve_toolset("xgrowth"))
+    for name in ALL_XGROWTH_TOOLS:
+        assert name in tools, f"{name} missing from resolved xgrowth toolset"
