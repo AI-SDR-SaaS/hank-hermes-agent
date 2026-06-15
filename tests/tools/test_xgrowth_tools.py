@@ -136,3 +136,60 @@ def test_xgrowth_toolset_resolves():
     tools = set(resolve_toolset("xgrowth"))
     for name in ALL_XGROWTH_TOOLS:
         assert name in tools, f"{name} missing from resolved xgrowth toolset"
+
+
+def test_module_is_auto_discoverable():
+    from pathlib import Path
+    from tools.registry import _module_registers_tools
+    assert _module_registers_tools(Path("tools/xgrowth_tools.py")) is True
+
+
+def test_post_string_dry_run_stays_safe():
+    # a non-boolean dry_run must NOT go live; only literal False does
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._post({"draft_id": "d1", "dry_run": "false"}))
+    assert m.call_args.kwargs["json"]["dry_run"] is True
+
+
+def test_post_force_only_on_literal_true():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._post({"draft_id": "d1", "force": "true"}))
+    assert m.call_args.kwargs["json"]["force"] is False
+
+
+def test_post_read_timeout_not_retried(monkeypatch):
+    import httpx
+    calls = {"n": 0}
+
+    class _C:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def request(self, *a, **k):
+            calls["n"] += 1
+            raise httpx.ReadTimeout("boom")
+
+    monkeypatch.setattr(xgrowth_client, "_build_client", lambda: _C())
+    with pytest.raises(xgrowth_client.XgrowthClientError):
+        xgrowth_client.request("POST", "/api/post", json={"draft_id": "d1"})
+    assert calls["n"] == 1  # non-idempotent: no replay
+
+
+def test_get_read_timeout_is_retried(monkeypatch):
+    import httpx
+    calls = {"n": 0}
+
+    class _C:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def request(self, *a, **k):
+            calls["n"] += 1
+            raise httpx.ReadTimeout("boom")
+
+    monkeypatch.setattr(xgrowth_client, "_build_client", lambda: _C())
+    with pytest.raises(xgrowth_client.XgrowthClientError):
+        xgrowth_client.request("GET", "/api/queue")
+    assert calls["n"] == 3  # idempotent: retried to the stop limit

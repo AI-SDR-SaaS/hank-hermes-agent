@@ -38,17 +38,20 @@ class _RetryableHTTPError(Exception):
     """Internal — raised on transient HTTP failure to trigger a tenacity retry."""
 
 
-_TRANSIENT_NETWORK_ERRORS = (
-    httpx.ConnectError,
-    httpx.ConnectTimeout,
+# Connection-phase failures: the request provably never reached the server,
+# so they are safe to retry for ANY method.
+_CONNECT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+# Read/write-phase failures: the server may already have processed the request,
+# so they are only safe to retry for idempotent methods.
+_READWRITE_ERRORS = (
     httpx.ReadError,
     httpx.ReadTimeout,
     httpx.WriteError,
     httpx.WriteTimeout,
-    httpx.PoolTimeout,
     httpx.RemoteProtocolError,
 )
-_RETRYABLE = _TRANSIENT_NETWORK_ERRORS + (_RetryableHTTPError,)
+
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 def check_xgrowth_requirements() -> bool:
@@ -74,15 +77,33 @@ def _build_client() -> httpx.Client:
     reraise=True,
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=0.5, min=0.5, max=4.0),
-    retry=retry_if_exception_type(_RETRYABLE),
+    retry=retry_if_exception_type(_RetryableHTTPError),
 )
 def _request_once(method: str, path: str, *, json: dict | None = None,
                   params: dict | None = None) -> dict:
-    with _build_client() as client:
-        response = client.request(method, path, json=json, params=params)
+    idempotent = method.upper() in _IDEMPOTENT_METHODS
+    try:
+        with _build_client() as client:
+            response = client.request(method, path, json=json, params=params)
+    except _CONNECT_ERRORS as e:
+        # Never reached the server -> safe to retry regardless of method.
+        raise _RetryableHTTPError(f"xgrowth connect error: {e}") from e
+    except _READWRITE_ERRORS as e:
+        if idempotent:
+            raise _RetryableHTTPError(f"xgrowth network error: {e}") from e
+        # Non-idempotent: the request may have been processed. Do NOT retry,
+        # to avoid duplicate live actions (e.g. a double-post).
+        raise XgrowthClientError(
+            0, f"xgrowth network error (no retry on {method}): {e}"
+        ) from e
 
     if 500 <= response.status_code < 600:
-        raise _RetryableHTTPError(f"xgrowth {method} {path} -> {response.status_code}")
+        if idempotent:
+            raise _RetryableHTTPError(f"xgrowth {method} {path} -> {response.status_code}")
+        raise XgrowthClientError(
+            response.status_code,
+            f"xgrowth {method} {path} -> {response.status_code} (no retry on {method})",
+        )
 
     if not response.is_success:
         try:
@@ -107,11 +128,15 @@ def _request_once(method: str, path: str, *, json: dict | None = None,
 
 def request(method: str, path: str, *, json: dict | None = None,
             params: dict | None = None) -> dict:
-    """Call xgrowth and return parsed JSON. Retries transient errors/5xx."""
+    """Call xgrowth and return parsed JSON.
+
+    Retries are idempotency-aware: connection-phase failures retry for any
+    method; read/write-phase failures and 5xx retry only for idempotent
+    methods (GET/HEAD/OPTIONS), so a transient failure on POST/PATCH/DELETE
+    never replays a non-idempotent action (e.g. a double live-post).
+    """
     logger.debug("xgrowth %s %s", method, path)
     try:
         return _request_once(method, path, json=json, params=params)
     except _RetryableHTTPError as e:
         raise XgrowthClientError(503, f"xgrowth unavailable: {e}") from e
-    except _TRANSIENT_NETWORK_ERRORS as e:
-        raise XgrowthClientError(0, f"xgrowth network error: {e}") from e

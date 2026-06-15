@@ -6,7 +6,7 @@ XGROWTH_API_BASE + XGROWTH_API_KEY. Thin wrappers over the xgrowth REST API
 """
 
 import logging
-from typing import Any, Callable
+from typing import Any
 
 from tools import xgrowth_client
 from tools.registry import registry, tool_error, tool_result
@@ -48,17 +48,6 @@ def _require(args: dict, *keys: str) -> str | None:
     if missing:
         return tool_error(f"missing required argument(s): {', '.join(missing)}")
     return None
-
-
-def _register(schema: dict, handler: Callable) -> None:
-    registry.register(
-        name=schema["name"],
-        toolset=XGROWTH_TOOLSET,
-        schema=schema,
-        handler=handler,
-        check_fn=xgrowth_client.check_xgrowth_requirements,
-        requires_env=_REQUIRES_ENV,
-    )
 
 
 # ----- Radar (scope: radar) -----
@@ -160,12 +149,12 @@ LIST_NICHES_SCHEMA = {
 def _list_niches(args: dict, **_kw: Any) -> str:
     return _call("GET", "/api/niches")
 
-_register(RADAR_FEED_SCHEMA, _radar_feed)
-_register(RADAR_REFRESH_SCHEMA, _radar_refresh)
-_register(GENERATE_SCHEMA, _generate)
-_register(SCORE_SCHEMA, _score)
-_register(HOOKS_SCHEMA, _hooks)
-_register(LIST_NICHES_SCHEMA, _list_niches)
+registry.register(name=RADAR_FEED_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=RADAR_FEED_SCHEMA, handler=_radar_feed, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=RADAR_REFRESH_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=RADAR_REFRESH_SCHEMA, handler=_radar_refresh, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=GENERATE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=GENERATE_SCHEMA, handler=_generate, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=SCORE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=SCORE_SCHEMA, handler=_score, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=HOOKS_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=HOOKS_SCHEMA, handler=_hooks, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=LIST_NICHES_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=LIST_NICHES_SCHEMA, handler=_list_niches, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
 
 # ----- Queue (scope: queue) -----
 
@@ -246,13 +235,13 @@ def _schedule_draft(args: dict, **_kw: Any) -> str:
         return err
     return _call("POST", f"/api/queue/{args['draft_id']}/schedule", json={"when_epoch": args["when_epoch"]})
 
-_register(LIST_QUEUE_SCHEMA, _list_queue)
-_register(EDIT_DRAFT_SCHEMA, _edit_draft)
-_register(APPROVE_SCHEMA, _approve_draft)
-_register(REJECT_SCHEMA, _reject_draft)
-_register(SCHEDULE_DRAFT_SCHEMA, _schedule_draft)
-_register(UNSCHEDULE_SCHEMA, _unschedule_draft)
-_register(DELETE_SCHEMA, _delete_draft)
+registry.register(name=LIST_QUEUE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=LIST_QUEUE_SCHEMA, handler=_list_queue, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=EDIT_DRAFT_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=EDIT_DRAFT_SCHEMA, handler=_edit_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=APPROVE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=APPROVE_SCHEMA, handler=_approve_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=REJECT_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=REJECT_SCHEMA, handler=_reject_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=SCHEDULE_DRAFT_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=SCHEDULE_DRAFT_SCHEMA, handler=_schedule_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=UNSCHEDULE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=UNSCHEDULE_SCHEMA, handler=_unschedule_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=DELETE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=DELETE_SCHEMA, handler=_delete_draft, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
 
 # ----- Post (scope: post) -----
 
@@ -290,8 +279,10 @@ def _post(args: dict, **_kw: Any) -> str:
         return err
     payload = {
         "draft_id": args["draft_id"],
-        "dry_run": bool(args.get("dry_run", True)),   # live-by-default API -> dry-run-by-default tool
-        "force": bool(args.get("force", False)),
+        # Safety: only a literal boolean False goes live; absent/None/other
+        # values stay dry-run. No unsafe truthiness/bool() coercion.
+        "dry_run": args.get("dry_run") is not False,
+        "force": args.get("force") is True,
     }
     return _call("POST", "/api/post", json=payload)
 
@@ -302,7 +293,7 @@ POST_DUE_SCHEMA = {
 }
 
 def _post_due(args: dict, **_kw: Any) -> str:
-    return _call("POST", "/api/post-due", json={"dry_run": bool(args.get("dry_run", True))})
+    return _call("POST", "/api/post-due", json={"dry_run": args.get("dry_run") is not False})
 
 TAKEDOWN_SCHEMA = {
     "name": "xgrowth_takedown",
@@ -358,11 +349,11 @@ INSIGHTS_SCHEMA = {
 def _insights(args: dict, **_kw: Any) -> str:
     return _call("POST", "/api/insights")
 
-_register(GET_SCHEDULE_SCHEMA, _get_schedule)
-_register(POST_SCHEMA, _post)
-_register(POST_DUE_SCHEMA, _post_due)
-_register(TAKEDOWN_SCHEMA, _takedown)
-_register(REPORTING_SUMMARY_SCHEMA, _reporting_summary)
-_register(REPORTING_DRIFT_SCHEMA, _reporting_drift)
-_register(REPORTING_SYNC_SCHEMA, _reporting_sync)
-_register(INSIGHTS_SCHEMA, _insights)
+registry.register(name=GET_SCHEDULE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=GET_SCHEDULE_SCHEMA, handler=_get_schedule, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=POST_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=POST_SCHEMA, handler=_post, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=POST_DUE_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=POST_DUE_SCHEMA, handler=_post_due, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=TAKEDOWN_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=TAKEDOWN_SCHEMA, handler=_takedown, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=REPORTING_SUMMARY_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=REPORTING_SUMMARY_SCHEMA, handler=_reporting_summary, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=REPORTING_DRIFT_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=REPORTING_DRIFT_SCHEMA, handler=_reporting_drift, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=REPORTING_SYNC_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=REPORTING_SYNC_SCHEMA, handler=_reporting_sync, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
+registry.register(name=INSIGHTS_SCHEMA["name"], toolset=XGROWTH_TOOLSET, schema=INSIGHTS_SCHEMA, handler=_insights, check_fn=xgrowth_client.check_xgrowth_requirements, requires_env=_REQUIRES_ENV)
