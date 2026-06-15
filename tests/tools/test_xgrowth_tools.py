@@ -47,3 +47,21 @@ def test_radar_feed_happy_path():
     with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"feed": []}) as m:
         json.loads(xgrowth_tools._radar_feed({}))
     assert m.call_args.args[:2] == ("GET", "/api/radar/feed")
+
+
+def test_edit_draft_requires_id_and_parts():
+    assert "error" in json.loads(xgrowth_tools._edit_draft({"draft_id": "d1"}))
+    assert "error" in json.loads(xgrowth_tools._edit_draft({"parts": ["x"]}))
+
+
+def test_approve_draft_path():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._approve_draft({"draft_id": "abc"}))
+    assert m.call_args.args[:2] == ("POST", "/api/queue/abc/approve")
+
+
+def test_schedule_draft_sends_when_epoch():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        json.loads(xgrowth_tools._schedule_draft({"draft_id": "d1", "when_epoch": 1812345678}))
+    assert m.call_args.args[:2] == ("POST", "/api/queue/d1/schedule")
+    assert m.call_args.kwargs["json"] == {"when_epoch": 1812345678}

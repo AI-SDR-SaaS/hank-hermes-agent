@@ -155,3 +155,90 @@ _register(GENERATE_SCHEMA, _generate)
 _register(SCORE_SCHEMA, _score)
 _register(HOOKS_SCHEMA, _hooks)
 _register(LIST_NICHES_SCHEMA, _list_niches)
+
+# ----- Queue (scope: queue) -----
+
+LIST_QUEUE_SCHEMA = {
+    "name": "xgrowth_list_queue",
+    "description": "List drafts in the queue. Optional status filter (e.g. generated, approved, scheduled, posted, failed).",
+    "parameters": {"type": "object", "properties": {"status": {"type": "string"}}},
+}
+
+def _list_queue(args: dict, **_kw: Any) -> str:
+    params = {"status": args["status"]} if args.get("status") else None
+    return _call("GET", "/api/queue", params=params)
+
+EDIT_DRAFT_SCHEMA = {
+    "name": "xgrowth_edit_draft",
+    "description": "Edit a draft's tweet parts (and/or poll options) before publishing.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "draft_id": {"type": "string"},
+            "parts": {"type": "array", "items": {"type": "string"}, "description": "Tweet text parts (one per tweet)."},
+            "poll_options": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["draft_id", "parts"],
+    },
+}
+
+def _edit_draft(args: dict, **_kw: Any) -> str:
+    err = _require(args, "draft_id", "parts")
+    if err:
+        return err
+    payload: dict = {"parts": args["parts"]}
+    if "poll_options" in args:
+        payload["poll_options"] = args["poll_options"]
+    return _call("PATCH", f"/api/queue/{args['draft_id']}", json=payload)
+
+def _make_draft_action(name: str, suffix: str, method: str, desc: str):
+    schema = {
+        "name": name,
+        "description": desc,
+        "parameters": {"type": "object", "properties": {"draft_id": {"type": "string"}}, "required": ["draft_id"]},
+    }
+    def handler(args: dict, **_kw: Any) -> str:
+        err = _require(args, "draft_id")
+        if err:
+            return err
+        path = f"/api/queue/{args['draft_id']}" + (f"/{suffix}" if suffix else "")
+        return _call(method, path)
+    handler.__name__ = "_" + name.replace("xgrowth_", "")
+    return schema, handler
+
+APPROVE_SCHEMA, _approve_draft = _make_draft_action(
+    "xgrowth_approve_draft", "approve", "POST", "Approve a queued draft (marks it ready to post).")
+REJECT_SCHEMA, _reject_draft = _make_draft_action(
+    "xgrowth_reject_draft", "reject", "POST", "Reject a queued draft.")
+UNSCHEDULE_SCHEMA, _unschedule_draft = _make_draft_action(
+    "xgrowth_unschedule_draft", "unschedule", "POST", "Remove a draft's schedule (back to unscheduled).")
+DELETE_SCHEMA, _delete_draft = _make_draft_action(
+    "xgrowth_delete_draft", "", "DELETE",
+    "Delete the draft RECORD. Does NOT remove a live tweet from X (use xgrowth_takedown for that).")
+
+SCHEDULE_DRAFT_SCHEMA = {
+    "name": "xgrowth_schedule_draft",
+    "description": "Schedule a draft to post at a unix epoch time (seconds). A periodic xgrowth_post_due tick publishes it when due.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "draft_id": {"type": "string"},
+            "when_epoch": {"type": "number", "description": "Unix epoch seconds for when to post."},
+        },
+        "required": ["draft_id", "when_epoch"],
+    },
+}
+
+def _schedule_draft(args: dict, **_kw: Any) -> str:
+    err = _require(args, "draft_id", "when_epoch")
+    if err:
+        return err
+    return _call("POST", f"/api/queue/{args['draft_id']}/schedule", json={"when_epoch": args["when_epoch"]})
+
+_register(LIST_QUEUE_SCHEMA, _list_queue)
+_register(EDIT_DRAFT_SCHEMA, _edit_draft)
+_register(APPROVE_SCHEMA, _approve_draft)
+_register(REJECT_SCHEMA, _reject_draft)
+_register(SCHEDULE_DRAFT_SCHEMA, _schedule_draft)
+_register(UNSCHEDULE_SCHEMA, _unschedule_draft)
+_register(DELETE_SCHEMA, _delete_draft)
