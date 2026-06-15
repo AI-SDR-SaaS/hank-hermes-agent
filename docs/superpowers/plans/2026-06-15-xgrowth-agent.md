@@ -876,7 +876,7 @@ Runs after the engine PR merges and the image rebuilds. Uses the proven per-agen
 **Operator prep (Jonathan):**
 - [ ] BotFather: create the agent's Telegram bot, grab the token.
 - [ ] xgrowth platform: mint a machine key in `XGROWTH_API_KEYS` (merge, don't clobber) with scopes `["generate","queue","post","radar","reporting"]`; note the key + the production base URL.
-- [ ] Railway: new service from this repo + volume at `/opt/data` (US East). Set env: `XGROWTH_API_BASE`, `XGROWTH_API_KEY`, the bot token, `TS_AUTHKEY`, `TS_HOSTNAME=<agent>`, `HERMES_DASHBOARD_TUI=1`, basic-auth user/pass/secret, OpenRouter brain. Provide the agent NAME.
+- [ ] Railway: **reuse one of the two empty dup projects** (`airy-freedom` or `intuitive-amazement`) instead of creating a new service. Confirm it builds from this repo + has a volume at `/opt/data` (US East); rename the service to match the agent. Set env: `XGROWTH_API_BASE`, `XGROWTH_API_KEY`, the bot token, `TS_AUTHKEY`, `TS_HOSTNAME=<agent>`, `HERMES_DASHBOARD_TUI=1`, basic-auth user/pass/secret, OpenRouter brain. Provide the agent NAME. (The other dup can then be deleted.)
 
 **Config + persona (me, via stdin pipe, no rebuild needed for SOUL/AGENTS):**
 - [ ] Write `/opt/data/config.yaml`: `model: anthropic/claude-haiku-4.5`, `toolsets: [hermes-cli, xgrowth]`, `skills.disabled` trimming to the X toolkit and **disabling the retired skills** `hank-x-drafter`, `hank-x-publisher`, `hank-x-scheduler`, `hank-x-trend-watcher`, `xurl` + the junk builtins. Validate with the venv python (`yaml.safe_load`).
