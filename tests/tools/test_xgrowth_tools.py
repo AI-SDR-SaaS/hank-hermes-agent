@@ -25,3 +25,25 @@ from tools.xgrowth_tools import XGROWTH_TOOLSET  # noqa: E402
 
 def test_toolset_constant():
     assert XGROWTH_TOOLSET == "xgrowth"
+
+
+def test_generate_rejects_missing_niche():
+    result = json.loads(xgrowth_tools._generate({"topic": "x"}))
+    assert "error" in result
+
+
+def test_generate_happy_path():
+    fake = {"id": "d1", "parts": ["hi"], "score": 82, "status": "generated"}
+    args = {"niche": "alex_finn", "topic": "missed calls", "kind": "single"}
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value=fake) as m:
+        result = json.loads(xgrowth_tools._generate(args))
+    assert result["id"] == "d1"
+    method, path = m.call_args.args[:2]
+    assert (method, path) == ("POST", "/api/generate")
+    assert m.call_args.kwargs["json"]["kind"] == "single"
+
+
+def test_radar_feed_happy_path():
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"feed": []}) as m:
+        json.loads(xgrowth_tools._radar_feed({}))
+    assert m.call_args.args[:2] == ("GET", "/api/radar/feed")
