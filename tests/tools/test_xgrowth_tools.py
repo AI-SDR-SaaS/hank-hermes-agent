@@ -193,3 +193,22 @@ def test_get_read_timeout_is_retried(monkeypatch):
     with pytest.raises(xgrowth_client.XgrowthClientError):
         xgrowth_client.request("GET", "/api/queue")
     assert calls["n"] == 3  # idempotent: retried to the stop limit
+
+
+def test_delete_read_timeout_is_retried(monkeypatch):
+    import httpx
+    calls = {"n": 0}
+
+    class _C:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def request(self, *a, **k):
+            calls["n"] += 1
+            raise httpx.ReadTimeout("boom")
+
+    monkeypatch.setattr(xgrowth_client, "_build_client", lambda: _C())
+    with pytest.raises(xgrowth_client.XgrowthClientError):
+        xgrowth_client.request("DELETE", "/api/queue/d1")
+    assert calls["n"] == 3  # DELETE is idempotent: retried to the stop limit

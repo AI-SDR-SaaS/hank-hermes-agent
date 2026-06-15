@@ -51,7 +51,10 @@ _READWRITE_ERRORS = (
     httpx.RemoteProtocolError,
 )
 
-_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# DELETE is idempotent per HTTP semantics (deleting the same resource twice
+# leaves the same end state), so transient DELETE failures are safe to retry.
+# PATCH/POST are excluded — retrying them could duplicate a non-idempotent action.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "DELETE"})
 
 
 def check_xgrowth_requirements() -> bool:
