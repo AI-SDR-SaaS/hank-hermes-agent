@@ -32,8 +32,19 @@ def _call(method: str, path: str, *, json: dict | None = None,
 
 
 def _require(args: dict, *keys: str) -> str | None:
-    """Return a tool_error string if any required key is missing/empty, else None."""
-    missing = [k for k in keys if not args.get(k)]
+    """Return a tool_error string if any required key is missing, else None.
+
+    "Missing" means the key is absent, None, or an empty/whitespace string.
+    Other falsy values (empty list, 0, False) count as present so required
+    non-string fields are not mis-rejected; the API enforces their semantics.
+    """
+    def _is_missing(k: str) -> bool:
+        if k not in args or args[k] is None:
+            return True
+        v = args[k]
+        return isinstance(v, str) and not v.strip()
+
+    missing = [k for k in keys if _is_missing(k)]
     if missing:
         return tool_error(f"missing required argument(s): {', '.join(missing)}")
     return None

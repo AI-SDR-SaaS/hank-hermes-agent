@@ -54,6 +54,16 @@ def test_edit_draft_requires_id_and_parts():
     assert "error" in json.loads(xgrowth_tools._edit_draft({"parts": ["x"]}))
 
 
+def test_require_allows_falsy_non_string_values():
+    # An explicitly-supplied empty list is "present", not "missing" — the API
+    # validates its semantics; the tool must not mis-reject it as missing.
+    with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
+        result = json.loads(xgrowth_tools._edit_draft({"draft_id": "d1", "parts": []}))
+    assert "error" not in result
+    assert m.call_args.args[:2] == ("PATCH", "/api/queue/d1")
+    assert m.call_args.kwargs["json"]["parts"] == []
+
+
 def test_approve_draft_path():
     with patch.object(xgrowth_tools.xgrowth_client, "request", return_value={"ok": True}) as m:
         json.loads(xgrowth_tools._approve_draft({"draft_id": "abc"}))
