@@ -54,6 +54,28 @@ def test_tool_registered_under_publisher_toolset(name):
     assert entry.schema.get("parameters", {}).get("type") == "object"
 
 
+def test_static_toolset_lists_every_registered_publisher_tool():
+    """The static TOOLSETS["publisher"] list must enumerate every tool the
+    registry maps to the publisher toolset.
+
+    Agent tool exposure flows through ``resolve_toolset("publisher")``, which
+    returns the static list and never consults the registry (because
+    "publisher" is a key in the static TOOLSETS dict). If a tool is registered
+    under the toolset but missing from the static list, it is invisible to every
+    agent — which is how publisher_quick_post / publisher_quick_post_file went
+    AWOL despite being registered.
+    """
+    from toolsets import resolve_toolset
+
+    registered = set(registry.get_tool_names_for_toolset(PUBLISHER_TOOLSET))
+    exposed = set(resolve_toolset(PUBLISHER_TOOLSET))
+    missing = registered - exposed
+    assert not missing, (
+        "Tools registered under the publisher toolset but missing from the "
+        f"static TOOLSETS['publisher'] list (so never exposed to agents): {sorted(missing)}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Toolset gating
 # ---------------------------------------------------------------------------
