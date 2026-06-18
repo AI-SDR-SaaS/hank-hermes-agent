@@ -223,6 +223,8 @@ TOOLSETS = {
             "publisher_get_post",
             "publisher_list_pending",
             "publisher_ingest_adhoc",
+            "publisher_quick_post",
+            "publisher_quick_post_file",
             "telegram_dm_owner",
         ],
         "includes": [],
